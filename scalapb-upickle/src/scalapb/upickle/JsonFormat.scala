@@ -10,8 +10,11 @@ class JsonFormatException(msg: String, cause: Exception = null)
     extends Exception(msg, cause)
 
 // something went wrong reading JSON as a protobuf message
-class JsonReadException(val message: String, val position: Int, cause: Exception = null)
-  extends JsonFormatException(s"$message (position: $position)", cause)
+class JsonReadException(
+    val message: String,
+    val position: Int,
+    cause: Exception = null
+) extends JsonFormatException(s"$message (position: $position)", cause)
 
 object JsonFormat:
 
@@ -33,14 +36,15 @@ object JsonFormat:
     import sd.ScalaType
     require(fd.isOptional)
     fd.scalaType match {
-      case ScalaType.Int        => sd.PInt(0)
-      case ScalaType.Long       => sd.PLong(0L)
-      case ScalaType.Float      => sd.PFloat(0)
-      case ScalaType.Double     => sd.PDouble(0)
-      case ScalaType.Boolean    => sd.PBoolean(false)
-      case ScalaType.String     => sd.PString("")
-      case ScalaType.ByteString => sd.PByteString(com.google.protobuf.ByteString.EMPTY)
-      case ScalaType.Enum(ed)   => sd.PEnum(ed.values(0))
+      case ScalaType.Int     => sd.PInt(0)
+      case ScalaType.Long    => sd.PLong(0L)
+      case ScalaType.Float   => sd.PFloat(0)
+      case ScalaType.Double  => sd.PDouble(0)
+      case ScalaType.Boolean => sd.PBoolean(false)
+      case ScalaType.String  => sd.PString("")
+      case ScalaType.ByteString =>
+        sd.PByteString(com.google.protobuf.ByteString.EMPTY)
+      case ScalaType.Enum(ed) => sd.PEnum(ed.values(0))
       case ScalaType.Message(_) =>
         throw JsonFormatException(
           "no default value for a message; it is automatically constructed when writing a message"
@@ -315,26 +319,36 @@ class JsonFormat(
         throw new RuntimeException("should not happen")
     }
 
-  def readJson[A <: scalapb.GeneratedMessage](json: ujson.Value)(using companion: scalapb.GeneratedMessageCompanion[A]): A =
+  def readJson[A <: scalapb.GeneratedMessage](json: ujson.Value)(using
+      companion: scalapb.GeneratedMessageCompanion[A]
+  ): A =
     val pmessage = ujson.transform(json, Reader(companion.scalaDescriptor))
     companion.messageReads.read(pmessage)
 
-  def readJsonString[A <: scalapb.GeneratedMessage](json: String)(using companion: scalapb.GeneratedMessageCompanion[A]): A =
+  def readJsonString[A <: scalapb.GeneratedMessage](json: String)(using
+      companion: scalapb.GeneratedMessageCompanion[A]
+  ): A =
     val pmessage = ujson.transform(json, Reader(companion.scalaDescriptor))
     companion.messageReads.read(pmessage)
 
   class Reader(md: sd.Descriptor) extends SimpleVisitor[sd.PValue, sd.PMessage]:
     override val expectedMsg: String = "expected JSON object"
-    override def visitObject(length: Int, jsonableKeys: Boolean, index: Int): ObjVisitor[sd.PValue, sd.PMessage] =
+    override def visitObject(
+        length: Int,
+        jsonableKeys: Boolean,
+        index: Int
+    ): ObjVisitor[sd.PValue, sd.PMessage] =
       MessageReader(md, false)
 
-  class MessageReader(md: sd.Descriptor, kvOnly: Boolean) extends ObjVisitor[sd.PValue, sd.PMessage]:
-    private val parsedFields = collection.mutable.Map.empty[sd.FieldDescriptor, sd.PValue]
+  class MessageReader(md: sd.Descriptor, kvOnly: Boolean)
+      extends ObjVisitor[sd.PValue, sd.PMessage]:
+    private val parsedFields =
+      collection.mutable.Map.empty[sd.FieldDescriptor, sd.PValue]
 
     private var key: String = null
     private var keyIndex: Int = -1
     private val fv = FieldVisitor(null)
-    private val fieldMap = md.fields.map{ field =>
+    private val fieldMap = md.fields.map { field =>
       jsonName(field) -> field
     }.toMap
 
@@ -346,31 +360,37 @@ class JsonFormat(
       key = v.asInstanceOf[String]
       fieldMap.get(key) match
         case Some(d) => fv.fd = d
-        case None => fv.fd = null
+        case None    => fv.fd = null
       if kvOnly && !(key == "key" || key == "value") then
-        throw JsonReadException(s"only JSON objects with keys 'key' and 'value' are allowed in maps; found '$key'", keyIndex)
+        throw JsonReadException(
+          s"only JSON objects with keys 'key' and 'value' are allowed in maps; found '$key'",
+          keyIndex
+        )
 
     override def subVisitor: Visitor[?, ?] =
       if fv.fd == null then NoOpVisitor else fv
 
     override def visitValue(v: sd.PValue, index: Int): Unit =
-      if v != sd.PEmpty then
-        parsedFields += fv.fd -> v
+      if v != sd.PEmpty then parsedFields += fv.fd -> v
 
-    override def visitEnd(index: Int): sd.PMessage = sd.PMessage(parsedFields.toMap)
+    override def visitEnd(index: Int): sd.PMessage =
+      sd.PMessage(parsedFields.toMap)
 
   end MessageReader
 
   // PMessage already does error checking, but the messages aren't friendly
-  class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false) extends ujson.JsVisitor[sd.PValue, sd.PValue]:
+  class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
+      extends ujson.JsVisitor[sd.PValue, sd.PValue]:
 
     private def unexpectedType(tpe: String, index: Int) =
       val fieldTpe =
         if fd.isMapField then "map"
-        else if fd.isRepeated then
-          s"repeated ${fd.protoType}"
+        else if fd.isRepeated then s"repeated ${fd.protoType}"
         else fd.protoType
-      throw JsonReadException(s"Protobuf message field '${fd.fullName}' of type ${fieldTpe} does not accept a JSON ${tpe}", index)
+      throw JsonReadException(
+        s"Protobuf message field '${fd.fullName}' of type ${fieldTpe} does not accept a JSON ${tpe}",
+        index
+      )
 
     // repeated fields are of the same base type as singular ones
     private def checkNotRepeated(tpe: String, index: Int) =
@@ -378,10 +398,8 @@ class JsonFormat(
 
     private def visitBool(value: Boolean, index: Int) =
       checkNotRepeated("boolean", index)
-      if fd.protoType.isTypeBool then
-        sd.PBoolean(value)
-      else
-        unexpectedType("boolean", index)
+      if fd.protoType.isTypeBool then sd.PBoolean(value)
+      else unexpectedType("boolean", index)
 
     override def visitTrue(index: Int) = visitBool(true, index)
     override def visitFalse(index: Int) = visitBool(false, index)
@@ -393,26 +411,24 @@ class JsonFormat(
       val asDouble = str.toDouble
       val asLong = asDouble.toLong
 
-      if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32 then
-        sd.PInt(asLong.toInt)
-      else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64 then
-        sd.PLong(asLong)
-      else if pt.isTypeDouble then
-        sd.PDouble(asDouble)
-      else if pt.isTypeDouble then
-        sd.PFloat(asDouble.toFloat)
+      if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32
+      then sd.PInt(asLong.toInt)
+      else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64
+      then sd.PLong(asLong)
+      else if pt.isTypeDouble then sd.PDouble(asDouble)
+      else if pt.isTypeDouble then sd.PFloat(asDouble.toFloat)
       else if pt.isTypeEnum && formatEnumsAsNumbers then
         val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
         ed.findValueByNumber(asLong.toInt) match
-          case None => sd.PEmpty // ignore unknown value
+          case None     => sd.PEmpty // ignore unknown value
           case Some(ev) => sd.PEnum(ev)
       else unexpectedType("number", index)
 
     override def visitFloat64StringParts(
-      s: CharSequence,
-      decIndex: Int,
-      expIndex: Int,
-      index: Int
+        s: CharSequence,
+        decIndex: Int,
+        expIndex: Int,
+        index: Int
     ) =
       checkNotRepeated("number", index)
       parseNumber(s.toString, index)
@@ -423,52 +439,62 @@ class JsonFormat(
       if fd.protoType.isTypeEnum && !formatEnumsAsNumbers then
         val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
         ed.values.find(_.name == s.toString) match
-          case None => sd.PEmpty // ignore unknown value
+          case None     => sd.PEmpty // ignore unknown value
           case Some(ev) => sd.PEnum(ev)
-      else if fd.protoType.isTypeString then
-        sd.PString(s.toString())
+      else if fd.protoType.isTypeString then sd.PString(s.toString())
       else if fd.protoType.isTypeBytes then
         sd.PByteString(
           com.google.protobuf.ByteString.copyFrom(
             java.util.Base64.getDecoder().decode(s.toString)
           )
         )
-      else
-        unexpectedType("string", index)
+      else unexpectedType("string", index)
 
-    override def visitNull(index: Int) = sd.PEmpty // we treat null as an omitted field
+    override def visitNull(index: Int) =
+      sd.PEmpty // we treat null as an omitted field
 
-    override def visitJsonableObject(length: Int, index: Int): ObjVisitor[sd.PValue, sd.PValue] =
+    override def visitJsonableObject(
+        length: Int,
+        index: Int
+    ): ObjVisitor[sd.PValue, sd.PValue] =
       if fd.isMapField && !formatMapEntriesAsKeyValuePairs then
         MapReader(length, fd)
       else if fd.protoType.isTypeMessage && !fd.isMapField then
         checkNotRepeated("object", index)
         val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
         MessageReader(d, false)
-      else
-        unexpectedType("object", index)
+      else unexpectedType("object", index)
 
-    override def visitArray(length: Int, index: Int): ArrVisitor[sd.PValue, sd.PValue] =
+    override def visitArray(
+        length: Int,
+        index: Int
+    ): ArrVisitor[sd.PValue, sd.PValue] =
       if fd.isMapField && formatMapEntriesAsKeyValuePairs then
         RepeatedReader(length, fd, true)
       else if fd.isRepeated && !fd.isMapField then
         RepeatedReader(length, fd, false)
-      else
-        unexpectedType("array", index)
+      else unexpectedType("array", index)
 
   end FieldVisitor
 
-  class KvOnlyVisitor(fd: sd.FieldDescriptor) extends SimpleVisitor[sd.PValue, sd.PValue]:
+  class KvOnlyVisitor(fd: sd.FieldDescriptor)
+      extends SimpleVisitor[sd.PValue, sd.PValue]:
     override def expectedMsg: String = "expected object"
-    override def visitObject(length: Int, jsonableKeys: Boolean, index: Int): ObjVisitor[sd.PValue, sd.PValue] =
+    override def visitObject(
+        length: Int,
+        jsonableKeys: Boolean,
+        index: Int
+    ): ObjVisitor[sd.PValue, sd.PValue] =
       val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
       MessageReader(d, true)
 
-  class RepeatedReader(sizeHint: Int, fd: sd.FieldDescriptor, kvOnly: Boolean) extends ArrVisitor[sd.PValue, sd.PValue]:
+  class RepeatedReader(sizeHint: Int, fd: sd.FieldDescriptor, kvOnly: Boolean)
+      extends ArrVisitor[sd.PValue, sd.PValue]:
     private val buffer = collection.mutable.ArrayBuffer.empty[sd.PValue]
     buffer.sizeHint(sizeHint)
 
-    val fv = if kvOnly then KvOnlyVisitor(fd) else FieldVisitor(fd, inArray = true)
+    val fv =
+      if kvOnly then KvOnlyVisitor(fd) else FieldVisitor(fd, inArray = true)
 
     override def subVisitor: Visitor[?, ?] = fv
 
@@ -479,8 +505,10 @@ class JsonFormat(
       sd.PRepeated(buffer.toVector)
 
   // special reader which reads JSON objects as protobuf maps
-  class MapReader(sizeHint: Int, fd: sd.FieldDescriptor) extends ObjVisitor[sd.PValue, sd.PValue]:
-    val mapEntryDescriptor = fd.scalaType.asInstanceOf[sd.ScalaType.Message].descriptor
+  class MapReader(sizeHint: Int, fd: sd.FieldDescriptor)
+      extends ObjVisitor[sd.PValue, sd.PValue]:
+    val mapEntryDescriptor =
+      fd.scalaType.asInstanceOf[sd.ScalaType.Message].descriptor
     val keyDescriptor = mapEntryDescriptor.findFieldByNumber(1).get
     val valueDescriptor = mapEntryDescriptor.findFieldByNumber(2).get
 
@@ -531,7 +559,8 @@ class JsonFormat(
       )
       entries += entry
 
-    override def visitEnd(index: Int): sd.PValue = sd.PRepeated(entries.toVector)
+    override def visitEnd(index: Int): sd.PValue =
+      sd.PRepeated(entries.toVector)
 
   end MapReader
 
