@@ -43,7 +43,8 @@ object WriterTest extends TestSuite:
              |  "repeated_string": [],
              |  "repeated_nested": [],
              |  "messages": {},
-             |  "nested_map": {}
+             |  "nested_map": {},
+             |  "data": ""
              |}
              |""".stripMargin
         assertEqual(fmt, msg, expected)
@@ -66,7 +67,8 @@ object WriterTest extends TestSuite:
              |  "repeatedString": [],
              |  "repeatedNested": [],
              |  "messages": {},
-             |  "nestedMap": {}
+             |  "nestedMap": {},
+             |  "data": ""
              |}
              |""".stripMargin
         assertEqual(fmt, msg, expected)
@@ -107,7 +109,7 @@ object WriterTest extends TestSuite:
       test("number"){
         val fmt = JsonFormat(
           includeDefaultValueFields = false,
-          formatEnumsAsNumber = true
+          formatEnumsAsNumbers = true
         )
         val expected = """{"state":1}"""
         assertEqual(fmt, msg, expected)
@@ -288,5 +290,14 @@ object WriterTest extends TestSuite:
         // even if defaults are not rendered, the choice needs to be kept
         assertEqual(fmt, msg, """{"either_4": {}}""")
       }
+    }
+    test("binary") {
+      val fmt = JsonFormat(
+        includeDefaultValueFields = false
+      )
+      val msg = protos.Message(
+        data = com.google.protobuf.ByteString.copyFromUtf8("hello, world")
+      )
+      assertEqual(fmt, msg, """{"data":"aGVsbG8sIHdvcmxk"}""")
     }
   }

@@ -1,25 +1,9 @@
 @main def main() =
-  val m = protos.Dummy(
-    42
+
+  val fmt = scalapb.upickle.JsonFormat(formatMapEntriesAsKeyValuePairs = true, includeDefaultValueFields = false)
+
+  val m = fmt.readJsonString[protos.Other](
+    """{"yo": "false", "x": 2, "y": 2, "other2": {"a": "ok"}, "ints": 5, "data": [{"key": 2, "value": "a"}], "bar": "a" }"""
   )
-  val msg = m.toPMessage
-  println(msg)
 
-  // for (fd, _) <- msg.value do
-  //   println(s"${fd.name} -> ${fd.isMapField}")
-
-  for (fd, _) <- msg.value do
-    println(s"${fd.name} -> ${fd.protoType.isTypeMessage}")
-
-  println("---------")
-  for f <- m.companion.scalaDescriptor.fields do
-    println(m.getFieldByNumber(f.number))
-
-
-  // import scalapb.descriptors.*
-
-  // PMessage(
-  //   Map(
-  //     Dummy.number -> PInt(42),
-  //     Dummy.str -> PString("hello world"),
-  //     Dummy.data -> PRepeated(Vector()), Dummy.msg -> PEmpty))
+  println(fmt.writeToJsonString(m))

@@ -34,6 +34,8 @@ message Message {
         int32 either_3 = 14;
         Nested either_4 = 15;
     }
+
+    bytes data = 100;
 }
 
 message Dummy {
@@ -52,4 +54,17 @@ message Dummy {
 
 message Other {
     string yo = 1;
+    int32 x = 2;
+    Other2 other2 = 3;
+    repeated int32 ints = 4;
+
+    map<int32, string> data = 5;
+    oneof choice {
+        string foo = 6;
+        string bar = 7;
+    }
+}
+
+message Other2 {
+    string a = 1;
 }
