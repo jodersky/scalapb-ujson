@@ -1,4 +1,4 @@
-package scalapb.upickle
+package scalapb.ujson
 
 import upickle.core.Visitor
 import upickle.core.ArrVisitor

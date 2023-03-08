@@ -1,4 +1,4 @@
-package scalapb.upickle
+package scalapb.ujson
 
 import scalapb.descriptors as sd
 import upickle.core.Visitor

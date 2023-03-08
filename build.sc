@@ -2,7 +2,7 @@ import mill._, scalalib._, scalafmt._
 import $ivy.`com.lihaoyi::mill-contrib-scalapblib:$MILL_VERSION`
 import contrib.scalapblib.ScalaPBModule
 
-object `scalapb-upickle` extends ScalaModule with ScalafmtModule {
+object `scalapb-ujson` extends ScalaModule with ScalafmtModule {
 
   def scalaVersion = "3.2.2"
 

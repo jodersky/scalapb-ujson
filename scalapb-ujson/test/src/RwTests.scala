@@ -1,6 +1,6 @@
 import utest.*
 
-import scalapb.upickle.JsonFormat
+import scalapb.ujson.JsonFormat
 
 object RwTests extends TestSuite:
 
