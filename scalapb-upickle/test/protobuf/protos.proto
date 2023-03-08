@@ -1,0 +1,55 @@
+syntax="proto3";
+
+message Message {
+    int32 number = 1;
+    int64 long_number = 2;
+    double dbl = 3;
+    string str = 4;
+    bool flag = 5;
+
+    enum State {
+        UNKNOWN = 0;
+        OK = 1;
+        ERROR = 2;
+    }
+    State state = 6;
+
+    message Nested {
+        message Inner {
+            string payload = 1;
+        }
+        Inner inner = 1;
+    }
+    Nested nested = 7;
+
+    repeated string repeated_string = 8;
+    repeated Nested repeated_nested = 9;
+
+    map<int32, string> messages = 10;
+    map<int32, Nested> nested_map = 11;
+
+    oneof choice {
+        string either_1 = 12;
+        string either_2 = 13;
+        int32 either_3 = 14;
+        Nested either_4 = 15;
+    }
+}
+
+message Dummy {
+    int32 number = 1;
+    string str = 2;
+    map<string, Other> data = 3;
+    Other msg = 10;
+
+    enum Foo {
+        UNKNOWN = 0;
+        OK = 1;
+        ERROR = 2;
+    }
+    Foo foo = 5;
+}
+
+message Other {
+    string yo = 1;
+}

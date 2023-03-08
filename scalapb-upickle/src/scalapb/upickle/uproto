@@ -1,0 +1,212 @@
+package mirageci.proto
+
+import scalapb.descriptors as sd
+
+
+def traverse[A, B](field: sd.PValue, visitor: upickle.core.Visitor[A, B]): B =
+  field match
+    case sd.PEmpty => visitor.visitNull(0)
+    case sd.PInt(value) => visitor.visitInt32(value, 0)
+    case sd.PLong(value) => visitor.visitInt64(value, 0)
+    case sd.PString(value) => visitor.visitString(value, 0)
+    case sd.PDouble(value) => visitor.visitFloat64(value, 0)
+    case sd.PFloat(value) => visitor.visitFloat64(value, 0)
+    case sd.PByteString(value) =>
+      val b64 = java.util.Base64.getEncoder()
+      visitor.visitString(b64.encodeToString(value.toByteArray()), 0)
+    case sd.PBoolean(value) =>
+      if value then visitor.visitTrue(0) else visitor.visitFalse(0)
+    case sd.PEnum(value) =>
+      visitor.visitString(value.name, 0)
+    case sd.PMessage(values) =>
+      val objVisitor = visitor.visitObject(0, true, 0)
+      for (fdesc, value) <- values do
+        objVisitor.visitKey(0)
+        val k = objVisitor.subVisitor.visitString(fdesc.asProto.getName, 0)
+        objVisitor.visitKeyValue(k)
+        val v = traverse(value, objVisitor.subVisitor)
+        objVisitor.visitValue(v.asInstanceOf[A], 0)
+      objVisitor.visitEnd(0)
+    // case sd.PRepeated(values) if desc.isMapField =>
+    case sd.PRepeated(values) =>
+      val arrVisitor = visitor.visitArray(0, 0)
+      for (value, i) <- values.zipWithIndex do
+        // arrVisitor.visitIndex(i)
+        val v = traverse(value, arrVisitor.subVisitor)
+        arrVisitor.visitValue(v.asInstanceOf[A], 0)
+      arrVisitor.visitEnd(0)
+
+def traverse[M <: scalapb.GeneratedMessage, A, B](msg: M, visitor: upickle.core.Visitor[A, B]): B =
+  traverse(msg.toPMessage, visitor)
+
+def writeToStream[A <: scalapb.GeneratedMessage](msg: A, out: java.io.OutputStream): Unit =
+  val writer = java.io.PrintWriter(out)
+  val printer = ujson.Renderer(writer)
+  traverse(msg, printer)
+
+def writeToString[A <: scalapb.GeneratedMessage](msg: A): String =
+  val printer = ujson.StringRenderer()
+  val writer = traverse(msg, printer)
+  writer.toString()
+
+
+// import collection.mutable
+// import upickle.core.ArrVisitor
+// import upickle.core.ObjVisitor
+
+// class TopVisitor(desc: sd.Descriptor) extends ujson.JsVisitor[sd.PMessage, sd.PMessage]:
+//   def visitNull(idx: Int) = sd.PMessage(Map())
+//   def visitFalse(index: Int) = sys.error("expected object")
+//   def visitTrue(index: Int) = sys.error("expected object")
+//   def visitString(s: CharSequence, index: Int): sd.PMessage = sys.error("expected object")
+//   def visitFloat64StringParts(s: CharSequence, decIndex: Int, expIndex: Int, index: Int): sd.PMessage = sys.error("expected object")
+
+//   def visitArray(length: Int, index: Int): ArrVisitor[sd.PMessage, sd.PMessage] = ???
+
+//   def visitJsonableObject(length: Int, index: Int): ObjVisitor[sd.PMessage, sd.PMessage] =
+//     MessageVisitor(Nil, desc)
+
+
+//   // override def visitEmpty(): sd.PMessage = sd.PMessage(Map())
+
+//   // override def visitString(text: CharSequence): sd.PMessage = sys.error("expected object")
+//   // override def visitQuotedString(text: CharSequence): sd.PMessage = visitString(text)
+//   // override def visitBlockStringFolded(text: CharSequence): sd.PMessage = visitString(text)
+//   // override def visitBlockStringLiteral(text: CharSequence): sd.PMessage = visitString(text)
+
+//   // override def visitArray(): yamlesque.ArrayVisitor[sd.PMessage] = ???
+
+//   // override def visitObject(): yamlesque.ObjectVisitor[sd.PMessage] = MessageVisitor(Nil, desc: sd.Descriptor)
+
+// class MessageVisitor(path: List[String], desc: sd.Descriptor) extends upickle.core.ObjVisitor[sd.PMessage, sd.PMessage]:
+//   private val fields = mutable.Map.empty[sd.FieldDescriptor, sd.PValue]
+//   private var fdesc: sd.FieldDescriptor = null
+//   private var key: String = null
+
+//   def
+
+// //   override def visitKey(key: String): Unit =
+// //     desc.findFieldByName(key) match
+// //       case None => sys.error("field not found " + key)
+// //       case Some(fd) =>
+// //         fdesc = fd
+// //         this.key = key
+
+// //   override def subVisitor(): yamlesque.Visitor[sd.PValue] = FieldVisitor(key :: path, fdesc)
+
+// //   override def visitValue(value: Any): Unit =
+// //     fields += fdesc -> value.asInstanceOf[sd.PValue]
+
+// //   override def visitEnd(): sd.PMessage =
+// //     sd.PMessage(fields.toMap)
+
+// // class FieldVisitor(path: List[String], fdesc: sd.FieldDescriptor, inArray: Boolean = false, inMap: Boolean = false)
+// //   extends yamlesque.Visitor[sd.PValue]:
+
+// //   def prettyPath = path.reverse.mkString(".")
+
+// //   override def visitEmpty(): sd.PValue = sys.error("empty value not allowed")
+
+// //   override def visitString(text: CharSequence): sd.PValue =
+// //     val str = text.toString()
+// //     import sd.ScalaType.*
+
+// //     def fieldError(message: String) = sys.error(s"field $prettyPath (value \"$str\") $message")
+
+// //     if fdesc.isMapField && !inMap then fieldError("must be an object")
+// //     if fdesc.isRepeated && !inArray then fieldError("must be an array")
+
+// //     def tryParse(action: => sd.PValue) =
+// //       try action catch case _: Exception => fieldError(s"cannot be parsed as a ${fdesc.protoType.name}")
+
+// //     fdesc.scalaType match
+// //       case Boolean =>
+// //         tryParse(sd.PBoolean(str.toBoolean))
+// //       case ByteString =>
+// //         val decoder = java.util.Base64.getDecoder()
+// //         tryParse(
+// //           sd.PByteString(
+// //             com.google.protobuf.ByteString.copyFrom(decoder.decode(str))
+// //           )
+// //         )
+// //       case Double => tryParse(sd.PDouble(str.toDouble))
+// //       case Float => tryParse(sd.PFloat(str.toFloat))
+// //       case Int => tryParse(sd.PInt(str.toInt))
+// //       case Long => tryParse(sd.PLong(str.toLong))
+// //       case String => tryParse(sd.PString(str))
+// //       case Message(descriptor) =>
+// //         fieldError("must be an object")
+// //       case Enum(descriptor) =>
+// //         descriptor.values.find(_.name == str) match
+// //           case None =>
+// //             fieldError("enum value unknown")
+// //           case Some(v) => sd.PEnum(v)
+
+// //   override def visitQuotedString(text: CharSequence): sd.PValue = visitString(text)
+// //   override def visitBlockStringFolded(text: CharSequence): sd.PValue = visitString(text)
+// //   override def visitBlockStringLiteral(text: CharSequence): sd.PValue = visitString(text)
+
+// //   override def visitArray(): yamlesque.ArrayVisitor[sd.PValue] =
+// //     if fdesc.isRepeated then
+// //       RepeatedVisitor(path, fdesc)
+// //     else
+// //       sys.error(s"field $prettyPath may not be an array")
+
+
+// //   override def visitObject(): yamlesque.ObjectVisitor[sd.PValue] =
+// //     fdesc.scalaType match
+// //       case sd.ScalaType.Message(desc) if fdesc.isMapField =>
+// //         MapFieldVisitor(path, desc)
+// //       case sd.ScalaType.Message(desc) =>
+// //         MessageVisitor(path, desc)
+// //       case other if fdesc.isRepeated && !inArray =>
+// //         sys.error(s"field $prettyPath must be an array")
+// //       case other =>
+// //         sys.error(s"field $prettyPath may no`t be an object")
+
+
+// // class RepeatedVisitor(path: List[String], desc: sd.FieldDescriptor) extends yamlesque.ArrayVisitor[sd.PRepeated]:
+// //   require(desc.isRepeated)
+
+// //   val items = mutable.ListBuffer.empty[sd.PValue]
+// //   var idx = 0
+
+// //   override def visitIndex(idx: Int): Unit = this.idx = idx
+// //   override def subVisitor(): yamlesque.Visitor[sd.PValue] =
+// //     FieldVisitor(idx.toString :: path, desc, true)
+
+// //   override def visitValue(value: Any): Unit =
+// //     items += value.asInstanceOf[sd.PValue]
+// //   override def visitEnd(): sd.PRepeated = sd.PRepeated(items.toVector)
+
+// // class MapFieldVisitor(path: List[String], desc: sd.Descriptor) extends yamlesque.ObjectVisitor[sd.PRepeated]:
+// //   // maps are reapeated 2-element messages
+// //   // https://developers.google.com/protocol-buffers/docs/encoding#maps
+// //   require(desc.fields.length == 2)
+
+// //   val keyDesc = desc.fields(0)
+// //   val valueDesc = desc.fields(1)
+
+// //   val items = mutable.ListBuffer.empty[sd.PMessage]
+// //   var key: sd.PValue = null
+// //   var keyName: String = null
+
+// //   override def visitKey(key: String): Unit =
+// //     keyName = key
+// //     val v = FieldVisitor(keyName :: path, keyDesc)
+// //     this.key = v.visitString(key)
+
+// //   override def subVisitor(): yamlesque.Visitor[sd.PValue] =
+// //     FieldVisitor(keyName :: path, valueDesc, inMap = true)
+
+// //   override def visitValue(value: Any): Unit =
+// //     val item = sd.PMessage(
+// //       Map(
+// //         keyDesc -> key,
+// //         valueDesc -> value.asInstanceOf[sd.PValue]
+// //       )
+// //     )
+// //     items += item
+
+// //   override def visitEnd(): sd.PRepeated =
+// //     sd.PRepeated(items.toVector)
