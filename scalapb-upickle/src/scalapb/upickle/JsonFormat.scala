@@ -5,6 +5,7 @@ import upickle.core.ArrVisitor
 import upickle.core.ObjVisitor
 import scalapb.descriptors as sd
 import ujson.Transformer
+import scalapb.GeneratedMessage
 
 class JsonFormatException(msg: String, cause: Exception = null)
     extends Exception(msg, cause)
@@ -89,39 +90,49 @@ class JsonFormat(
     val formatMapEntriesAsKeyValuePairs: Boolean = false
 ):
 
-  def jsonName(fd: sd.FieldDescriptor): String =
+  private def jsonName(fd: sd.FieldDescriptor): String =
     if preserveProtoFieldNames then fd.asProto.getName
     else
       // protoc<3 doesn't know about json_name, so we fill it in if it's not populated.
       fd.asProto.jsonName
         .getOrElse(JsonFormat.camelify(fd.asProto.getName))
 
-  def write[V](
-      out: Visitor[_, V],
-      message: scalapb.GeneratedMessage
-  ): V =
-    writeMessage(
-      out,
-      message.companion.scalaDescriptor.fields,
-      message.toPMessage
-    )
+  def write(message: scalapb.GeneratedMessage, indent: Int = -1, escapeUnicode: Boolean = false): String =
+    val writer = java.io.StringWriter()
+    writeTo(message, writer, indent, escapeUnicode)
+    writer.toString
 
-  def writeToJsonString(
-      message: scalapb.GeneratedMessage,
-      indent: Int = -1
-  ): String =
-    val sb = new java.io.StringWriter
-    write(ujson.Renderer(sb, indent), message)
-    sb.toString()
-  end writeToJsonString
+  def writeTo(message: scalapb.GeneratedMessage,
+              out: java.io.Writer,
+              indent: Int = -1,
+              escapeUnicode: Boolean = false): Unit =
+    Writer.transform(message, ujson.Renderer(out, indent, escapeUnicode))
+
+  def writeToOutputStream(message: scalapb.GeneratedMessage,
+                          out: java.io.OutputStream,
+                          indent: Int = -1,
+                          escapeUnicode: Boolean = false): Unit =
+    Writer.transform(message, ujson.BaseByteRenderer(out, indent, escapeUnicode))
+
+  def writeToByteArray(message: scalapb.GeneratedMessage,
+                       indent: Int = -1,
+                       escapeUnicode: Boolean = false): Array[Byte] =
+    val baos = java.io.ByteArrayOutputStream()
+    writeToOutputStream(message, baos, indent, escapeUnicode)
+    baos.toByteArray
 
   def writeToJson(
       message: scalapb.GeneratedMessage,
-      indent: Int = -1
+      indent: Int = -1,
+      escapeUnicode: Boolean = false
   ): ujson.Value =
-    write(ujson.Value, message)
+    Writer.transform(message, ujson.Value)
 
-  def writeMessage[V](
+  object Writer extends Transformer[scalapb.GeneratedMessage]:
+    override def transform[T](j: GeneratedMessage, f: Visitor[?, T]): T =
+      writeMessage(f, j.companion.scalaDescriptor.fields, j.toPMessage)
+
+  private def writeMessage[V](
       out: Visitor[_, V],
       orderedFields: Seq[
         sd.FieldDescriptor
@@ -141,7 +152,7 @@ class JsonFormat(
 
     objVisitor.visitEnd(-1)
 
-  def writeField(
+  private def writeField(
       out: ObjVisitor[_, _],
       fd: sd.FieldDescriptor,
       value: sd.PValue
@@ -273,7 +284,7 @@ class JsonFormat(
 
   private inline def unsignedInt(n: Int): Long = n & 0x00000000ffffffffL
 
-  def writePrimitive[V](
+  private def writePrimitive[V](
       out: Visitor[_, V],
       fd: sd.FieldDescriptor,
       value: sd.PValue
@@ -319,16 +330,10 @@ class JsonFormat(
         throw new RuntimeException("should not happen")
     }
 
-  def readJson[A <: scalapb.GeneratedMessage](json: ujson.Value)(using
+  def read[A <: scalapb.GeneratedMessage](json: ujson.Readable)(using
       companion: scalapb.GeneratedMessageCompanion[A]
   ): A =
-    val pmessage = ujson.transform(json, Reader(companion.scalaDescriptor))
-    companion.messageReads.read(pmessage)
-
-  def readJsonString[A <: scalapb.GeneratedMessage](json: String)(using
-      companion: scalapb.GeneratedMessageCompanion[A]
-  ): A =
-    val pmessage = ujson.transform(json, Reader(companion.scalaDescriptor))
+    val pmessage = json.transform(Reader(companion.scalaDescriptor))
     companion.messageReads.read(pmessage)
 
   class Reader(md: sd.Descriptor) extends SimpleVisitor[sd.PValue, sd.PMessage]:
@@ -340,7 +345,7 @@ class JsonFormat(
     ): ObjVisitor[sd.PValue, sd.PMessage] =
       MessageReader(md, false)
 
-  class MessageReader(md: sd.Descriptor, kvOnly: Boolean)
+  private class MessageReader(md: sd.Descriptor, kvOnly: Boolean)
       extends ObjVisitor[sd.PValue, sd.PMessage]:
     private val parsedFields =
       collection.mutable.Map.empty[sd.FieldDescriptor, sd.PValue]
@@ -379,7 +384,7 @@ class JsonFormat(
   end MessageReader
 
   // PMessage already does error checking, but the messages aren't friendly
-  class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
+  private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
       extends ujson.JsVisitor[sd.PValue, sd.PValue]:
 
     private def unexpectedType(tpe: String, index: Int) =
@@ -477,7 +482,7 @@ class JsonFormat(
 
   end FieldVisitor
 
-  class KvOnlyVisitor(fd: sd.FieldDescriptor)
+  private class KvOnlyVisitor(fd: sd.FieldDescriptor)
       extends SimpleVisitor[sd.PValue, sd.PValue]:
     override def expectedMsg: String = "expected object"
     override def visitObject(
@@ -505,7 +510,7 @@ class JsonFormat(
       sd.PRepeated(buffer.toVector)
 
   // special reader which reads JSON objects as protobuf maps
-  class MapReader(sizeHint: Int, fd: sd.FieldDescriptor)
+  private class MapReader(sizeHint: Int, fd: sd.FieldDescriptor)
       extends ObjVisitor[sd.PValue, sd.PValue]:
     val mapEntryDescriptor =
       fd.scalaType.asInstanceOf[sd.ScalaType.Message].descriptor

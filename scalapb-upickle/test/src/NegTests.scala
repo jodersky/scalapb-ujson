@@ -11,7 +11,7 @@ object NegTests extends TestSuite:
       val fmt = JsonFormat()
 
       val ex = intercept[JsonReadException](
-        fmt.readJsonString[Message](
+        fmt.read[Message](
           """|{
              |  "number": "a"
              |}
@@ -24,7 +24,7 @@ object NegTests extends TestSuite:
       val fmt = JsonFormat()
 
       val ex = intercept[JsonReadException](
-        fmt.readJsonString[Message](
+        fmt.read[Message](
           """|{
              |  "number": ["a"]
              |}
@@ -37,7 +37,7 @@ object NegTests extends TestSuite:
       val fmt = JsonFormat()
 
       val ex = intercept[JsonReadException](
-        fmt.readJsonString[Message](
+        fmt.read[Message](
           """|{
              |  "repeated_string": "a"
              |}
@@ -50,7 +50,7 @@ object NegTests extends TestSuite:
       val fmt = JsonFormat()
 
       val ex = intercept[JsonReadException](
-        fmt.readJsonString[Message](
+        fmt.read[Message](
           """|{
              |  "repeated_string": {}
              |}
@@ -64,7 +64,7 @@ object NegTests extends TestSuite:
 
       test("wrong key type") {
         val ex = intercept[JsonReadException](
-          fmt.readJsonString[Message](
+          fmt.read[Message](
             """|{
                |  "messages": {
                |    "a" : ""
@@ -77,7 +77,7 @@ object NegTests extends TestSuite:
       }
       test("wrong value type") {
         val ex = intercept[JsonReadException](
-          fmt.readJsonString[Message](
+          fmt.read[Message](
             """|{
                |  "messages": {
                |    "1" : {}
@@ -90,7 +90,7 @@ object NegTests extends TestSuite:
       }
       test("wrong type") {
         val ex = intercept[JsonReadException](
-          fmt.readJsonString[Message](
+          fmt.read[Message](
             """|{
                |  "messages": []
                |}
@@ -105,7 +105,7 @@ object NegTests extends TestSuite:
 
       test("wrong key type") {
         val ex = intercept[JsonReadException](
-          fmt.readJsonString[Message](
+          fmt.read[Message](
             """|{
                |  "messages": [{
                |    "key" : "1",
@@ -119,7 +119,7 @@ object NegTests extends TestSuite:
       }
       test("wrong value type") {
         val ex = intercept[JsonReadException](
-          fmt.readJsonString[Message](
+          fmt.read[Message](
             """|{
                |  "messages": [{
                |    "key" : 1,
@@ -133,7 +133,7 @@ object NegTests extends TestSuite:
       }
       test("wrong type") {
         val ex = intercept[JsonReadException](
-          fmt.readJsonString[Message](
+          fmt.read[Message](
             """|{
                |  "messages": {}
                |}
@@ -144,7 +144,7 @@ object NegTests extends TestSuite:
       }
       test("unknown key") {
         val ex = intercept[JsonReadException](
-          fmt.readJsonString[Message](
+          fmt.read[Message](
             """|{
                |  "messages": [{
                |    "other" : 1,

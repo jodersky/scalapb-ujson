@@ -14,15 +14,16 @@ object RwTests extends TestSuite:
     val tree = ujson.read(json)
     assert(asTree == tree) // json tree did not match
 
-    val asString = format.writeToJsonString(message)
+    val asString = format.write(message)
     val rerender = ujson.write(tree) // normalize any kind of indentation
     assert(asString == rerender) // json strings did not match
 
-    val fromString: A = format.readJsonString[A](json)
-    val cleaned = // write to and from proto to remove any default values
-      companion.parseFrom(fromString.toByteArray)
+    val fromString: A = format.read[A](json)
+    val fromTree: A = format.read[A](tree)
 
-    if checkRead then assert(cleaned == message)
+    if checkRead then
+      assert(fromString == message)
+      assert(fromTree == message)
 
 
   val tests = Tests{
