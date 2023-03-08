@@ -37,34 +37,3 @@ message Message {
 
     bytes data = 100;
 }
-
-message Dummy {
-    int32 number = 1;
-    string str = 2;
-    map<string, Other> data = 3;
-    Other msg = 10;
-
-    enum Foo {
-        UNKNOWN = 0;
-        OK = 1;
-        ERROR = 2;
-    }
-    Foo foo = 5;
-}
-
-message Other {
-    string yo = 1;
-    int32 x = 2;
-    Other2 other2 = 3;
-    repeated int32 ints = 4;
-
-    map<int32, string> data = 5;
-    oneof choice {
-        string foo = 6;
-        string bar = 7;
-    }
-}
-
-message Other2 {
-    string a = 1;
-}
