@@ -44,10 +44,41 @@ object JsonFormat:
         )
     }
 
+/** Utility for writing and reading ScalaPB-generated messages to and from JSON
+  * via the ujson library.
+  *
+  * This utility is designed around ujson's visitors. This means that
+  * intermediate data structures are avoided as much as reasonably possible, and
+  * therefore memory usage is kept low and performance should be very good for
+  * conversions. For example, if you write a ScalaPB message to a JSON string,
+  * the message will be transformed into a string directly, without passing
+  * through an intermediate JSON tree structure. Or, if you write a message to a
+  * stream, the message is written on demand and no full JSON string needs to be
+  * generated beforehand. // TODO: check this latter claim, I'm not sure if
+  * upickle's renderers actually uphold this
+  *
+  * @param preserveProtoFieldNames Default true. If set, then the field names of
+  * protobuf messages are used as-is (this means usually snake_case). Otherwise,
+  * they are converted to camelCase.
+  *
+  * @param includeDefaultValueFields Default true. If set, then fields of
+  * messages are always included in JSON, even if they are not set or correspond
+  * to the default protobuf value.
+  *
+  * @param formatEnumsAsNumbers Default false. Use enum's numbers instead of
+  * their names.
+  *
+  * @param formatMapEntriesAsKeyValuePairs Default false. By default, maps are
+  * serialized as JSON objects, with the JSON keys being the stringified form of
+  * the protobuf keys (protobuf only allows primitive types in map keys). If
+  * set, this will instead serialize maps as objects with `{"key":...,
+  * "value":...}` attributes.
+  *
+  */
 class JsonFormat(
     val preserveProtoFieldNames: Boolean = true,
     val includeDefaultValueFields: Boolean = true,
-    val formatEnumsAsNumber: Boolean = false,
+    val formatEnumsAsNumbers: Boolean = false,
     val formatMapEntriesAsKeyValuePairs: Boolean = false
 ):
 
@@ -248,7 +279,7 @@ class JsonFormat(
         //     if (config.isFormattingEnumsAsNumber) JInt(e.number)
         //     else JString(e.name)
         // }
-        if formatEnumsAsNumber then out.visitInt32(e.number, -1)
+        if formatEnumsAsNumbers then out.visitInt32(e.number, -1)
         else out.visitString(e.name, -1)
 
       case sd.PInt(v) if fd.protoType.isTypeUint32 =>
