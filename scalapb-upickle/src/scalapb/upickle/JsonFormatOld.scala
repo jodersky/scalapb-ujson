@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import scalapb.descriptors as sd
 
 class JsonFormatException(msg: String, cause: Exception)
-  extends Exception(msg, cause) {
+    extends Exception(msg, cause) {
   def this(msg: String) = this(msg, null)
 }
 
@@ -59,17 +59,16 @@ object JsonFormat:
     }
   }
 
-
 class JsonFormat(
-  val preserveProtoFieldNames: Boolean = true,
-  val includeDefaultValueFields: Boolean = true,
-  val formattingEnumsAsNumber: Boolean = false,
-  val formattingMapEntriesAsKeyValuePairs: Boolean = false
+    val preserveProtoFieldNames: Boolean = true,
+    val includeDefaultValueFields: Boolean = true,
+    val formattingEnumsAsNumber: Boolean = false,
+    val formattingMapEntriesAsKeyValuePairs: Boolean = false
 ):
 
   def write[M <: scalapb.GeneratedMessage, V](
-    out: Visitor[_, V],
-    message: M
+      out: Visitor[_, V],
+      message: M
   ): V =
     val descriptor = message.companion.scalaDescriptor
     val objVisitor = out.visitObject(
@@ -78,13 +77,18 @@ class JsonFormat(
       -1
     )
 
-    descriptor.fields.foreach{ f =>
+    descriptor.fields.foreach { f =>
       val name =
         if preserveProtoFieldNames then f.name
         else JsonFormat.jsonName(f)
 
       if f.protoType.isTypeMessage then
-        writeMessageField(objVisitor, f, name, message.getFieldByNumber(f.number))
+        writeMessageField(
+          objVisitor,
+          f,
+          name,
+          message.getFieldByNumber(f.number)
+        )
       else
         writeNonMessageField(objVisitor, f, name, message.getField(f))
         // serializeNonMessageField(f, name, m.getField(f), b)
@@ -92,10 +96,10 @@ class JsonFormat(
     objVisitor.visitEnd(-1)
 
   private def writeMessageField[T](
-    out: ObjVisitor[T, _],
-    fd: sd.FieldDescriptor,
-    name: String,
-    value: Any
+      out: ObjVisitor[T, _],
+      fd: sd.FieldDescriptor,
+      name: String,
+      value: Any
   ): Unit = value match
     case null =>
     case Nil =>
@@ -133,7 +137,8 @@ class JsonFormat(
           if valueDescriptor.protoType.isTypeMessage then
             write(
               objv.narrow.subVisitor,
-              x.getFieldByNumber(valueDescriptor.number).asInstanceOf[scalapb.GeneratedMessage]
+              x.getFieldByNumber(valueDescriptor.number)
+                .asInstanceOf[scalapb.GeneratedMessage]
             )
           else
             writeSingleValue(
@@ -142,7 +147,6 @@ class JsonFormat(
               x.getField(valueDescriptor)
             )
           out.narrow.visitValue(objv.visitEnd(-1), -1)
-
       else
         out.visitKeyValue(out.visitKey(-1).visitString(name, -1))
         val arrv = out.subVisitor.visitArray(xs.size, -1)
@@ -163,10 +167,10 @@ class JsonFormat(
       throw new JsonFormatException(v.toString)
 
   private def writeNonMessageField[T](
-    out: ObjVisitor[T, _],
-    fd: sd.FieldDescriptor,
-    name: String,
-    value: sd.PValue
+      out: ObjVisitor[T, _],
+      fd: sd.FieldDescriptor,
+      name: String,
+      value: sd.PValue
   ): Unit = value match
     case sd.PEmpty =>
       if includeDefaultValueFields && fd.containingOneof.isEmpty then
@@ -201,7 +205,9 @@ class JsonFormat(
         )
 
     case v =>
-      if includeDefaultValueFields || !fd.isOptional || !fd.file.isProto3 || v != JsonFormat.defaultValue(fd) || fd.containingOneof.isDefined then
+      if includeDefaultValueFields || !fd.isOptional || !fd.file.isProto3 || v != JsonFormat
+          .defaultValue(fd) || fd.containingOneof.isDefined
+      then
         out.visitKeyValue(out.visitKey(-1).visitString(name, -1))
         out.narrow.visitValue(
           writeSingleValue(out.subVisitor, fd, v),
@@ -213,9 +219,9 @@ class JsonFormat(
   //   if (n < 0) BigInt(n & 0x7fffffffffffffffL).setBit(63) else BigInt(n)
 
   def writeSingleValue[V](
-    out: Visitor[_, V],
-    fd: sd.FieldDescriptor,
-    value: sd.PValue
+      out: Visitor[_, V],
+      fd: sd.FieldDescriptor,
+      value: sd.PValue
   ): V =
     value match {
       case sd.PEnum(e) =>
@@ -225,16 +231,14 @@ class JsonFormat(
         //     if (config.isFormattingEnumsAsNumber) JInt(e.number)
         //     else JString(e.name)
         // }
-        if formattingEnumsAsNumber then
-          out.visitInt32(e.number, -1)
-        else
-          out.visitString(e.name, -1)
+        if formattingEnumsAsNumber then out.visitInt32(e.number, -1)
+        else out.visitString(e.name, -1)
 
-      case sd.PInt(v) if fd.protoType.isTypeUint32  =>
+      case sd.PInt(v) if fd.protoType.isTypeUint32 =>
         out.visitInt64(unsignedInt(v), -1)
       case sd.PInt(v) if fd.protoType.isTypeFixed32 =>
         out.visitInt64(unsignedInt(v), -1)
-      case sd.PInt(v)                               =>
+      case sd.PInt(v) =>
         out.visitInt32(v, -1)
       case sd.PLong(v) if fd.protoType.isTypeUint64 =>
         out.visitUInt64(v, -1)
@@ -242,13 +246,13 @@ class JsonFormat(
         out.visitUInt64(v, -1)
       case sd.PLong(v) =>
         out.visitInt64(v, -1)
-      case sd.PDouble(v)                            =>
+      case sd.PDouble(v) =>
         out.visitFloat64(v, -1)
       case sd.PFloat(v) =>
         out.visitFloat32(v, -1)
       case sd.PBoolean(v) =>
         if v then out.visitTrue(-1) else out.visitFalse(-1)
-      case sd.PString(v)  =>
+      case sd.PString(v) =>
         out.visitString(v, -1)
       case sd.PByteString(v) =>
         val bytes = v.toByteArray()
@@ -256,7 +260,6 @@ class JsonFormat(
       case _: sd.PMessage | sd.PRepeated(_) | sd.PEmpty =>
         throw new RuntimeException("Should not happen")
     }
-
 
   // class Printer[A] extends ujson.JsVisitor[A, _]:
   //   override def visitJsonableObject(length: Int, index: Int): ObjVisitor[A, Printer#J] = ???
@@ -274,6 +277,5 @@ class JsonFormat(
   //   override def visitFloat64StringParts(s: CharSequence, decIndex: Int, expIndex: Int, index: Int): J = ???
 
   // def printer[A <: scalapb.GeneratedMessage] =
-
 
   //   ???

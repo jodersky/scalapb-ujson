@@ -4,7 +4,7 @@ import scalapb.upickle.JsonFormat
 
 object WriterTest extends TestSuite:
 
-  def assertEqual(
+  def assertEqual2(
     format: JsonFormat,
     message: scalapb.GeneratedMessage,
     json: ujson.Value
@@ -15,33 +15,68 @@ object WriterTest extends TestSuite:
     val asString = format.writeToJsonString(message)
     assert(asString == json.render()) // json strings did not match
 
+  def assertEqual(
+    format: JsonFormat,
+    message: scalapb.GeneratedMessage,
+    json: String
+  ): Unit =
+    val asTree = format.writeToJson(message)
+    val fromString = ujson.read(json)
+    assert(asTree == fromString) // json tree did not match
+
+    val asString = format.writeToJsonString(message)
+    val fromRerender = ujson.write(fromString) // normalize any kind of indentation
+    assert(asString == fromRerender) // json strings did not match
+
   val tests = Tests{
     test("empty") {
       val msg = protos.Message()
       test("no defaults"){
         val fmt = JsonFormat(includeDefaultValueFields = false)
-        assertEqual(fmt, msg, ujson.Obj())
+        assertEqual(fmt, msg, "{}")
       }
       test("show defaults") {
         val fmt = JsonFormat(includeDefaultValueFields = true)
-        val expected = ujson.Obj(
-          "number" -> 0,
-          "long_number" -> 0,
-          "dbl" -> 0,
-          "str" -> "",
-          "flag" -> false,
-          "state" -> "UNKNOWN",
-          "nested" -> ujson.Obj(
-            "inner" -> ujson.Obj(
-              "payload" -> ""
-            )
-          ),
-          "repeated_string" -> ujson.Arr(),
-          "repeated_nested" -> ujson.Arr(),
-          "messages" -> ujson.Obj(),
-          "nested_map" -> ujson.Obj()
-        )
-        assertEqual(fmt, msg, expected)
+
+        val expected2 =
+          """|{
+             |  "number": 0,
+             |  "long_number": 0,
+             |  "dbl": 0,
+             |  "str": "",
+             |  "flag": false,
+             |  "state": "UNKNOWN",
+             |  "nested": {
+             |    "inner": {
+             |      "payload": ""
+             |    }
+             |  },
+             |  "repeated_string": [],
+             |  "repeated_nested": [],
+             |  "messages": {},
+             |  "nested_map": {}
+             |}
+             |
+             |""".stripMargin
+
+        // val expected = ujson.Obj(
+        //   "number" -> 0,
+        //   "long_number" -> 0,
+        //   "dbl" -> 0,
+        //   "str" -> "",
+        //   "flag" -> false,
+        //   "state" -> "UNKNOWN",
+        //   "nested" -> ujson.Obj(
+        //     "inner" -> ujson.Obj(
+        //       "payload" -> ""
+        //     )
+        //   ),
+        //   "repeated_string" -> ujson.Arr(),
+        //   "repeated_nested" -> ujson.Arr(),
+        //   "messages" -> ujson.Obj(),
+        //   "nested_map" -> ujson.Obj()
+        // )
+        assertEqual(fmt, msg, expected2)
       }
       test("camel case") {
         val fmt = JsonFormat(includeDefaultValueFields = true, preserveProtoFieldNames = false)
@@ -62,7 +97,7 @@ object WriterTest extends TestSuite:
           "messages" -> ujson.Obj(),
           "nestedMap" -> ujson.Obj()
         )
-        assertEqual(fmt, msg, expected)
+        assertEqual2(fmt, msg, expected)
       }
     }
     test("primitives") {
@@ -82,7 +117,7 @@ object WriterTest extends TestSuite:
           "str" -> "hello, world",
           "flag" -> true
         )
-        assertEqual(fmt, msg, expected)
+        assertEqual2(fmt, msg, expected)
       }
     }
     test("enum") {
@@ -94,7 +129,7 @@ object WriterTest extends TestSuite:
         val expected = ujson.Obj(
           "state" -> "OK"
         )
-        assertEqual(fmt, msg, expected)
+        assertEqual2(fmt, msg, expected)
       }
       test("number"){
         val fmt = JsonFormat(
@@ -104,7 +139,7 @@ object WriterTest extends TestSuite:
         val expected = ujson.Obj(
           "state" -> 1
         )
-        assertEqual(fmt, msg, expected)
+        assertEqual2(fmt, msg, expected)
       }
     }
     test("nested") {
@@ -123,7 +158,7 @@ object WriterTest extends TestSuite:
           )
         )
       )
-      assertEqual(fmt, msg, expected)
+      assertEqual2(fmt, msg, expected)
     }
 
     test("repeated") {
@@ -161,7 +196,7 @@ object WriterTest extends TestSuite:
           ujson.Obj()
         )
       )
-      assertEqual(fmt, msg, expected)
+      assertEqual2(fmt, msg, expected)
     }
     test("map") {
       val nested1 = protos.Message.Nested()
@@ -200,7 +235,7 @@ object WriterTest extends TestSuite:
             "3" -> ujson.Obj()
           )
         )
-        assertEqual(fmt, msg, expected)
+        assertEqual2(fmt, msg, expected)
       }
 
       test("kv-pairs") {
@@ -242,7 +277,7 @@ object WriterTest extends TestSuite:
             )
           )
         )
-        assertEqual(fmt, msg, expected)
+        assertEqual2(fmt, msg, expected)
       }
     }
     test("oneof") {
@@ -251,25 +286,25 @@ object WriterTest extends TestSuite:
       )
       test("opt1") {
         val msg = protos.Message().withEither1("ok")
-        assertEqual(fmt, msg, ujson.Obj("either_1" -> "ok"))
+        assertEqual2(fmt, msg, ujson.Obj("either_1" -> "ok"))
       }
       test("opt2") {
         val msg = protos.Message().withEither2("ok")
-        assertEqual(fmt, msg, ujson.Obj("either_2" -> "ok"))
+        assertEqual2(fmt, msg, ujson.Obj("either_2" -> "ok"))
       }
       test("opt3") {
         val msg = protos.Message().withEither3(5)
-        assertEqual(fmt, msg, ujson.Obj("either_3" -> 5))
+        assertEqual2(fmt, msg, ujson.Obj("either_3" -> 5))
       }
       test("opt default") {
         val msg = protos.Message().withEither3(0)
         // even if defaults are not rendered, the choice needs to be kept
-        assertEqual(fmt, msg, ujson.Obj("either_3" -> 0))
+        assertEqual2(fmt, msg, ujson.Obj("either_3" -> 0))
       }
       test("opt default msg") {
         val msg = protos.Message().withEither4(protos.Message.Nested())
         // even if defaults are not rendered, the choice needs to be kept
-        assertEqual(fmt, msg, ujson.Obj("either_4" -> ujson.Obj()))
+        assertEqual2(fmt, msg, ujson.Obj("either_4" -> ujson.Obj()))
       }
     }
     test("basic") {
