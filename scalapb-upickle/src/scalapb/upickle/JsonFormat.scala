@@ -3,12 +3,15 @@ package scalapb.upickle
 import upickle.core.Visitor
 import upickle.core.ArrVisitor
 import upickle.core.ObjVisitor
-// import com.google.protobuf.ByteString
 import scalapb.descriptors as sd
-import upickle.core.SimpleVisitor
+import ujson.Transformer
 
 class JsonFormatException(msg: String, cause: Exception = null)
     extends Exception(msg, cause)
+
+// something went wrong reading JSON as a protobuf message
+class JsonReadException(val message: String, val position: Int, cause: Exception = null)
+  extends JsonFormatException(s"$message (position: $position)", cause)
 
 object JsonFormat:
 
@@ -313,21 +316,17 @@ class JsonFormat(
     }
 
   def readJson[A <: scalapb.GeneratedMessage](json: ujson.Value)(using companion: scalapb.GeneratedMessageCompanion[A]): A =
-    val pmessage = ujson.transform(json, TopReader(companion.scalaDescriptor))
+    val pmessage = ujson.transform(json, Reader(companion.scalaDescriptor))
     companion.messageReads.read(pmessage)
 
   def readJsonString[A <: scalapb.GeneratedMessage](json: String)(using companion: scalapb.GeneratedMessageCompanion[A]): A =
-    val pmessage = ujson.transform(json, TopReader(companion.scalaDescriptor))
+    val pmessage = ujson.transform(json, Reader(companion.scalaDescriptor))
     companion.messageReads.read(pmessage)
 
-  class TopReader(md: sd.Descriptor) extends upickle.core.SimpleVisitor[sd.PValue, sd.PMessage]:
-    override val expectedMsg: String = "expected object"
+  class Reader(md: sd.Descriptor) extends SimpleVisitor[sd.PValue, sd.PMessage]:
+    override val expectedMsg: String = "expected JSON object"
     override def visitObject(length: Int, jsonableKeys: Boolean, index: Int): ObjVisitor[sd.PValue, sd.PMessage] =
       MessageReader(md, false)
-
-  object KeyVisitor extends upickle.core.SimpleVisitor[_, String]:
-    override def visitString(s: CharSequence, index: Int): String = s.toString()
-    val expectedMsg = "expected message key as string"
 
   class MessageReader(md: sd.Descriptor, kvOnly: Boolean) extends ObjVisitor[sd.PValue, sd.PMessage]:
     private val parsedFields = collection.mutable.Map.empty[sd.FieldDescriptor, sd.PValue]
@@ -335,118 +334,9 @@ class JsonFormat(
     private var key: String = null
     private var keyIndex: Int = -1
     private val fv = FieldVisitor(null)
-
-    // // PMessage already does error checking, but the messages aren't friendly
-    // object FieldVisitor extends Visitor[sd.PValue, sd.PValue]:
-    //   private def unexpectedType(tpe: String, index: Int) =
-    //     throw JsonFormatException(s"message field '${fd.fullName}' of ${fd.protoType} does not accept a ${tpe} (position: $index)")
-
-    //   private def visitBool(value: Boolean, index: Int) =
-    //     if fd.protoType.isTypeBool then
-    //       sd.PBoolean(value)
-    //     else
-    //       unexpectedType("boolean", index)
-
-
-    //   override def visitTrue(index: Int) = visitBool(true, index)
-    //   override def visitFalse(index: Int) = visitBool(false, index)
-
-    //   override def visitFloat32(d: Float, index: Int) =
-    //     if fd.protoType.isTypeFloat then
-    //       sd.PFloat(d)
-    //     else
-    //       unexpectedType("float32", index)
-
-    //   override def visitFloat64(d: Double, index: Int) =
-    //     if fd.protoType.isTypeDouble then
-    //       sd.PDouble(d)
-    //     else
-    //       unexpectedType("float64", index)
-    //   override def visitFloat64String(s: String, index: Int) =
-    //     if fd.protoType.isTypeDouble then
-    //       sd.PDouble(s.toDouble)
-    //     else
-    //       unexpectedType("float64 (string)", index)
-
-    //   override def visitFloat64StringParts(
-    //     s: CharSequence,
-    //     decIndex: Int,
-    //     expIndex: Int,
-    //     index: Int
-    //   ) =
-    //     if (decIndex != -1 || expIndex != -1) visitFloat64String(s.toString, index)
-    //     else
-    //       visitInt64(
-    //         upickle.core.Util.parseIntegralNum(s, decIndex, expIndex, index),
-    //         -1
-    //       )
-
-    //   override def visitInt32(i: Int, index: Int) =
-    //     val pt = fd.protoType
-    //     if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32 then
-    //       sd.PInt(i.toInt)
-    //     else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64 then
-    //       sd.PLong(i)
-    //     else if pt.isTypeFloat then
-    //       sd.PFloat(i.toFloat)
-    //     else if pt.isTypeDouble then
-    //       sd.PDouble(i.toDouble)
-    //     else
-    //       unexpectedType("int32", index)
-
-    //   override def visitInt64(i: Long, index: Int) =
-    //     val pt = fd.protoType
-
-    //     if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32 then
-    //       sd.PInt(i.toInt)
-    //     else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64 then
-    //       sd.PLong(i)
-    //     else if pt.isTypeDouble then
-    //       sd.PDouble(i.toDouble)
-    //     else
-    //       unexpectedType("int64", index)
-    //   override def visitUInt64(i: Long, index: Int) = visitInt64(i, index)
-
-    //   override def visitString(s: CharSequence, index: Int) =
-    //     if fd.protoType.isTypeEnum && !formatEnumsAsNumbers then
-    //       val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
-    //       ed.values.find(_.name == s.toString) match
-    //         case None => sd.PEmpty // ignore unknown value
-    //         case Some(ev) => sd.PEnum(ev)
-
-    //     if fd.protoType.isTypeString then
-    //       sd.PString(s.toString())
-    //     else if fd.protoType.isTypeBytes then
-    //       sd.PByteString(
-    //         com.google.protobuf.ByteString.copyFrom(
-    //           java.util.Base64.getDecoder().decode(s.toString)
-    //         )
-    //       )
-    //     else
-    //       unexpectedType("string", index)
-
-    //   override def visitChar(s: Char, index: Int) = visitString(s.toString, index)
-
-    //   override def visitNull(index: Int) = sd.PEmpty // we treat null as an omitted field
-
-    //   override def visitExt(tag: Byte, bytes: Array[Byte], offset: Int, len: Int, index: Int) = ???
-    //   override def visitBinary(bytes: Array[Byte], offset: Int, len: Int, index: Int) = ???
-
-    //   override def visitObject(length: Int, jsonableKeys: Boolean, index: Int): ObjVisitor[sd.PValue, sd.PMessage] =
-    //     if fd.isMapField then
-    //       sys.error("not yet")
-    //       // MapReader(fd)
-    //     if fd.protoType.isTypeMessage then
-    //       val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
-    //       MessageReader(d)
-    //     else
-    //       unexpectedType("object", index)
-
-    //   override def visitArray(length: Int, index: Int): ArrVisitor[sd.PValue, sd.PValue] = RepeatedReader(fd)
-
-    //   // override def visitJsonableObject(length: Int, index: Int): ObjVisitor[Nothing, Unit] = ???
-
-    // end FieldVisitor
+    private val fieldMap = md.fields.map{ field =>
+      jsonName(field) -> field
+    }.toMap
 
     override def visitKey(index: Int): Visitor[?, ?] =
       keyIndex = index
@@ -454,11 +344,11 @@ class JsonFormat(
 
     override def visitKeyValue(v: Any): Unit =
       key = v.asInstanceOf[String]
-      md.findFieldByName(key) match
+      fieldMap.get(key) match
         case Some(d) => fv.fd = d
         case None => fv.fd = null
       if kvOnly && !(key == "key" || key == "value") then
-        throw JsonFormatException(s"only JSON objects with keys 'key' and 'value' are allowed in maps; found $key (position: $keyIndex)")
+        throw JsonReadException(s"only JSON objects with keys 'key' and 'value' are allowed in maps; found '$key'", keyIndex)
 
     override def subVisitor: Visitor[?, ?] =
       if fv.fd == null then NoOpVisitor else fv
@@ -472,41 +362,51 @@ class JsonFormat(
   end MessageReader
 
   // PMessage already does error checking, but the messages aren't friendly
-  class FieldVisitor(var fd: sd.FieldDescriptor) extends Visitor[sd.PValue, sd.PValue]:
+  class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false) extends ujson.JsVisitor[sd.PValue, sd.PValue]:
+
     private def unexpectedType(tpe: String, index: Int) =
-      val fieldTpe = if fd.isMapField then "map" else fd.protoType
-      throw JsonFormatException(s"Protobuf message field '${fd.fullName}' of type ${fieldTpe} does not accept a JSON ${tpe} (position: $index)")
+      val fieldTpe =
+        if fd.isMapField then "map"
+        else if fd.isRepeated then
+          s"repeated ${fd.protoType}"
+        else fd.protoType
+      throw JsonReadException(s"Protobuf message field '${fd.fullName}' of type ${fieldTpe} does not accept a JSON ${tpe}", index)
+
+    // repeated fields are of the same base type as singular ones
+    private def checkNotRepeated(tpe: String, index: Int) =
+      if !inArray && fd.isRepeated then unexpectedType(tpe, index)
 
     private def visitBool(value: Boolean, index: Int) =
+      checkNotRepeated("boolean", index)
       if fd.protoType.isTypeBool then
         sd.PBoolean(value)
       else
         unexpectedType("boolean", index)
 
-
     override def visitTrue(index: Int) = visitBool(true, index)
     override def visitFalse(index: Int) = visitBool(false, index)
 
-    override def visitFloat32(d: Float, index: Int) = ???
-      // if fd.protoType.isTypeFloat then
-      //   sd.PFloat(d)
-      // else
-      //   unexpectedType("float32", index)
+    // TODO: improve precision loss
+    private def parseNumber(str: String, index: Int) =
+      val pt = fd.protoType
 
-    override def visitFloat64(d: Double, index: Int) =
-      if fd.protoType.isTypeDouble then
-        sd.PDouble(d)
-      else
-        unexpectedType("float64", index)
-    override def visitFloat64String(s: String, index: Int) =
-      if fd.protoType.isTypeDouble then
-        sd.PDouble(s.toDouble)
-      else
-        unexpectedType("float64 (string)", index)
+      val asDouble = str.toDouble
+      val asLong = asDouble.toLong
 
-    // repeated fields are of the same base type as singular ones
-    private def checkNotRepeated(tpe: String, index: Int) =
-      if fd.isRepeated then unexpectedType(tpe, index)
+      if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32 then
+        sd.PInt(asLong.toInt)
+      else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64 then
+        sd.PLong(asLong)
+      else if pt.isTypeDouble then
+        sd.PDouble(asDouble)
+      else if pt.isTypeDouble then
+        sd.PFloat(asDouble.toFloat)
+      else if pt.isTypeEnum && formatEnumsAsNumbers then
+        val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
+        ed.findValueByNumber(asLong.toInt) match
+          case None => sd.PEmpty // ignore unknown value
+          case Some(ev) => sd.PEnum(ev)
+      else unexpectedType("number", index)
 
     override def visitFloat64StringParts(
       s: CharSequence,
@@ -514,49 +414,18 @@ class JsonFormat(
       expIndex: Int,
       index: Int
     ) =
-      println("parts")
       checkNotRepeated("number", index)
-      if (decIndex != -1 || expIndex != -1) visitFloat64String(s.toString, index)
-      else
-        visitInt64(
-          upickle.core.Util.parseIntegralNum(s, decIndex, expIndex, index),
-          -1
-        )
-
-    override def visitInt32(i: Int, index: Int) = ???
-      // val pt = fd.protoType
-      // if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32 then
-      //   sd.PInt(i.toInt)
-      // else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64 then
-      //   sd.PLong(i)
-      // else if pt.isTypeFloat then
-      //   sd.PFloat(i.toFloat)
-      // else if pt.isTypeDouble then
-      //   sd.PDouble(i.toDouble)
-      // else
-      //   unexpectedType("int32", index)
-
-    override def visitInt64(i: Long, index: Int) =
-      val pt = fd.protoType
-
-      if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32 then
-        sd.PInt(i.toInt)
-      else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64 then
-        sd.PLong(i)
-      else if pt.isTypeDouble then
-        sd.PDouble(i.toDouble)
-      else
-        unexpectedType("int64", index)
-    override def visitUInt64(i: Long, index: Int) = visitInt64(i, index)
+      parseNumber(s.toString, index)
 
     override def visitString(s: CharSequence, index: Int) =
+      checkNotRepeated("string", index)
+
       if fd.protoType.isTypeEnum && !formatEnumsAsNumbers then
         val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
         ed.values.find(_.name == s.toString) match
           case None => sd.PEmpty // ignore unknown value
           case Some(ev) => sd.PEnum(ev)
-
-      if fd.protoType.isTypeString then
+      else if fd.protoType.isTypeString then
         sd.PString(s.toString())
       else if fd.protoType.isTypeBytes then
         sd.PByteString(
@@ -567,17 +436,13 @@ class JsonFormat(
       else
         unexpectedType("string", index)
 
-    override def visitChar(s: Char, index: Int) = visitString(s.toString, index)
-
     override def visitNull(index: Int) = sd.PEmpty // we treat null as an omitted field
 
-    override def visitExt(tag: Byte, bytes: Array[Byte], offset: Int, len: Int, index: Int) = ???
-    override def visitBinary(bytes: Array[Byte], offset: Int, len: Int, index: Int) = ???
-
-    override def visitObject(length: Int, jsonableKeys: Boolean, index: Int): ObjVisitor[sd.PValue, sd.PValue] =
+    override def visitJsonableObject(length: Int, index: Int): ObjVisitor[sd.PValue, sd.PValue] =
       if fd.isMapField && !formatMapEntriesAsKeyValuePairs then
         MapReader(length, fd)
       else if fd.protoType.isTypeMessage && !fd.isMapField then
+        checkNotRepeated("object", index)
         val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
         MessageReader(d, false)
       else
@@ -586,7 +451,7 @@ class JsonFormat(
     override def visitArray(length: Int, index: Int): ArrVisitor[sd.PValue, sd.PValue] =
       if fd.isMapField && formatMapEntriesAsKeyValuePairs then
         RepeatedReader(length, fd, true)
-      if fd.isRepeated && !fd.isMapField then
+      else if fd.isRepeated && !fd.isMapField then
         RepeatedReader(length, fd, false)
       else
         unexpectedType("array", index)
@@ -599,12 +464,11 @@ class JsonFormat(
       val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
       MessageReader(d, true)
 
-
   class RepeatedReader(sizeHint: Int, fd: sd.FieldDescriptor, kvOnly: Boolean) extends ArrVisitor[sd.PValue, sd.PValue]:
     private val buffer = collection.mutable.ArrayBuffer.empty[sd.PValue]
     buffer.sizeHint(sizeHint)
 
-    val fv = if kvOnly then KvOnlyVisitor(fd) else FieldVisitor(fd)
+    val fv = if kvOnly then KvOnlyVisitor(fd) else FieldVisitor(fd, inArray = true)
 
     override def subVisitor: Visitor[?, ?] = fv
 
@@ -614,7 +478,7 @@ class JsonFormat(
     override def visitEnd(index: Int): sd.PValue =
       sd.PRepeated(buffer.toVector)
 
-  // special reader which reads objects as maps
+  // special reader which reads JSON objects as protobuf maps
   class MapReader(sizeHint: Int, fd: sd.FieldDescriptor) extends ObjVisitor[sd.PValue, sd.PValue]:
     val mapEntryDescriptor = fd.scalaType.asInstanceOf[sd.ScalaType.Message].descriptor
     val keyDescriptor = mapEntryDescriptor.findFieldByNumber(1).get
@@ -645,11 +509,12 @@ class JsonFormat(
         case sd.ScalaType.String =>
           Some(sd.PString(keyString))
         case _ =>
-          throw JsonFormatException("illegal key type")
+          throw JsonReadException("illegal key type", keyIndex)
       keyValueOpt match
         case None =>
-          throw JsonFormatException(
-            s"cannot parse key '$keyString' of map field '${fd.fullName}' as a ${keyDescriptor.scalaType} (position: $keyIndex)"
+          throw JsonReadException(
+            s"cannot parse key '$keyString' of map field '${fd.fullName}' as a ${keyDescriptor.scalaType}",
+            keyIndex
           )
         case Some(pvalue) => key = pvalue
 
@@ -670,50 +535,4 @@ class JsonFormat(
 
   end MapReader
 
-object NoOpVisitor extends Visitor[sd.PValue, sd.PValue] {
-
-  def visitArray(length: Int, index: Int) = new ArrVisitor[sd.PValue, sd.PValue] {
-    def subVisitor = NoOpVisitor.this
-    def visitValue(v: sd.PValue, index: Int): Unit = ()
-    def visitEnd(index: Int): sd.PValue = sd.PEmpty
-  }
-  def visitObject(length: Int, jsonableKeys: Boolean, index: Int) = new ObjVisitor[sd.PValue, sd.PValue] {
-    def subVisitor = NoOpVisitor.this
-    def visitKey(index: Int) = NoOpVisitor
-    def visitKeyValue(s: Any): Unit =()
-    def visitValue(v: sd.PValue, index: Int): Unit = ()
-    def visitEnd(index: Int): sd.PValue = sd.PEmpty
-  }
-
-  def visitNull(index: Int): sd.PValue = sd.PEmpty
-  def visitFalse(index: Int): sd.PValue = sd.PEmpty
-  def visitTrue(index: Int): sd.PValue = sd.PEmpty
-  def visitFloat64StringParts(s: CharSequence, decIndex: Int, expIndex: Int, index: Int): sd.PValue = sd.PEmpty
-  def visitString(s: CharSequence, index: Int): sd.PValue = sd.PEmpty
-
-  def visitFloat64(d: Double, index: Int) = sd.PEmpty
-
-  def visitFloat32(d: Float, index: Int) = sd.PEmpty
-
-  def visitInt8(i: Byte, index: Int) = sd.PEmpty
-  def visitUInt8(i: Byte, index: Int) = sd.PEmpty
-
-  def visitInt16(i: Short, index: Int) = sd.PEmpty
-  def visitUInt16(i: Short, index: Int) = sd.PEmpty
-
-  def visitInt32(i: Int, index: Int) = sd.PEmpty
-  def visitUInt32(i: Int, index: Int) = sd.PEmpty
-
-  def visitInt64(i: Long, index: Int) = sd.PEmpty
-  def visitUInt64(i: Long, index: Int) = sd.PEmpty
-
-  def visitFloat64String(s: String, index: Int) = sd.PEmpty
-
-  def visitBinary(bytes: Array[Byte], offset: Int, len: Int, index: Int) = sd.PEmpty
-
-  def visitFloat64StringParts(s: CharSequence, decIndex: Int, expIndex: Int) = sd.PEmpty
-
-  def visitExt(tag: Byte, bytes: Array[Byte], offset: Int, len: Int, index: Int) = sd.PEmpty
-
-  def visitChar(s: Char, index: Int) = sd.PEmpty
-}
+end JsonFormat

@@ -2,20 +2,28 @@ import utest.*
 
 import scalapb.upickle.JsonFormat
 
-object WriterTest extends TestSuite:
+object RwTests extends TestSuite:
 
-  def assertEqual(
+  def assertEqual[A <: scalapb.GeneratedMessage](
     format: JsonFormat,
-    message: scalapb.GeneratedMessage,
-    json: String
-  ): Unit =
+    message: A,
+    json: String,
+    checkRead: Boolean = true
+  )(using companion: scalapb.GeneratedMessageCompanion[A]): Unit =
     val asTree = format.writeToJson(message)
-    val fromString = ujson.read(json)
-    assert(asTree == fromString) // json tree did not match
+    val tree = ujson.read(json)
+    assert(asTree == tree) // json tree did not match
 
     val asString = format.writeToJsonString(message)
-    val fromRerender = ujson.write(fromString) // normalize any kind of indentation
-    assert(asString == fromRerender) // json strings did not match
+    val rerender = ujson.write(tree) // normalize any kind of indentation
+    assert(asString == rerender) // json strings did not match
+
+    val fromString: A = format.readJsonString[A](json)
+    val cleaned = // write to and from proto to remove any default values
+      companion.parseFrom(fromString.toByteArray)
+
+    if checkRead then assert(cleaned == message)
+
 
   val tests = Tests{
     test("empty") {
@@ -47,32 +55,23 @@ object WriterTest extends TestSuite:
              |  "data": ""
              |}
              |""".stripMargin
-        assertEqual(fmt, msg, expected)
+        assertEqual(fmt, msg, expected, checkRead = false) // can't easily check reads with defaults included
       }
-      test("camel case") {
-        val fmt = JsonFormat(includeDefaultValueFields = true, preserveProtoFieldNames = false)
-        val expected =
-          """|{
-             |  "number": 0,
-             |  "longNumber": 0,
-             |  "dbl": 0,
-             |  "str": "",
-             |  "flag": false,
-             |  "state": "UNKNOWN",
-             |  "nested": {
-             |    "inner": {
-             |      "payload": ""
-             |    }
-             |  },
-             |  "repeatedString": [],
-             |  "repeatedNested": [],
-             |  "messages": {},
-             |  "nestedMap": {},
-             |  "data": ""
-             |}
-             |""".stripMargin
-        assertEqual(fmt, msg, expected)
-      }
+    }
+    test("camel case") {
+      val fmt = JsonFormat(includeDefaultValueFields = false, preserveProtoFieldNames = false)
+      val msg = protos.Message(
+        longNumber = 2,
+        repeatedString = Seq("a", "b")
+      )
+      val expected =
+        """|{
+           |  "longNumber": 2,
+           |  "repeatedString": ["a", "b"]
+           |}
+           |""".stripMargin
+      assertEqual(fmt, msg, expected)
+
     }
     test("primitives") {
       val msg = protos.Message(
