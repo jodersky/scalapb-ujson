@@ -7,14 +7,14 @@ import scalapb.descriptors as sd
 import ujson.Transformer
 import scalapb.GeneratedMessage
 
-class JsonFormatException(msg: String, cause: Exception = null)
+class JsonFormatException(msg: String, cause: Throwable = null)
     extends Exception(msg, cause)
 
 // something went wrong reading JSON as a protobuf message
 class JsonReadException(
     val message: String,
     val position: Int,
-    cause: Exception = null
+    cause: Throwable = null
 ) extends JsonFormatException(s"$message (position: $position)", cause)
 
 object JsonFormat:
@@ -52,6 +52,16 @@ object JsonFormat:
         )
     }
 
+
+
+// val defaultSpecialWriters = Map(
+//   com.google.protobuf.timestamp.Timestamp.scalaDescriptor ->
+//     ([A] => (v: Visitor[_, A], m: sd.PMessage) => Timestamps.writeTimestamp())
+
+//     Timestamps.writeTimestamp(t)
+
+// )
+
 /** Utility for writing and reading ScalaPB-generated messages to and from JSON
   * via the ujson library.
   *
@@ -87,7 +97,9 @@ class JsonFormat(
     val preserveProtoFieldNames: Boolean = true,
     val includeDefaultValueFields: Boolean = true,
     val formatEnumsAsNumbers: Boolean = false,
-    val formatMapEntriesAsKeyValuePairs: Boolean = false
+    val formatMapEntriesAsKeyValuePairs: Boolean = false,
+    val specialWriters: Map[sd.Descriptor, MessageWriter] = DefaultRegistry.specialWriters,
+    val specialReaders: Map[sd.Descriptor, MessageReader] = DefaultRegistry.specialReaders
 ):
 
   private def jsonName(fd: sd.FieldDescriptor): String =
@@ -130,27 +142,31 @@ class JsonFormat(
 
   object Writer extends Transformer[scalapb.GeneratedMessage]:
     override def transform[T](j: GeneratedMessage, f: Visitor[?, T]): T =
-      writeMessage(f, j.companion.scalaDescriptor.fields, j.toPMessage)
+      writeMessage(f, j.companion.scalaDescriptor, j.toPMessage)
 
+  // PMessage doesn't have a field order, so we pass it in externally
   private def writeMessage[V](
       out: Visitor[_, V],
-      orderedFields: Seq[
-        sd.FieldDescriptor
-      ], // PMessage doesn't have a field order, so we pass it in externally
+      descriptor: sd.Descriptor,
       message: sd.PMessage
   ): V =
-    val fields = message.value
-    val objVisitor = out.visitObject(
-      length = fields.size,
-      jsonableKeys = true, // no idea what this does,
-      -1
-    )
+    specialWriters.get(descriptor) match
+      case Some(writer) => writer.writeMessage(out, message)
+      case None =>
+        val orderedFields: Seq[sd.FieldDescriptor] = descriptor.fields
+        val fields = message.value
+        val objVisitor = out.visitObject(
+          length = fields.size,
+          jsonableKeys = true, // no idea what this does,
+          -1
+        )
 
-    for descriptor <- orderedFields do
-      val value = fields(descriptor)
-      writeField(objVisitor, descriptor, value)
+        for descriptor <- orderedFields do
+          val value = fields(descriptor)
+          writeField(objVisitor, descriptor, value)
 
-    objVisitor.visitEnd(-1)
+        objVisitor.visitEnd(-1)
+  end writeMessage
 
   private def writeField(
       out: ObjVisitor[_, _],
@@ -173,7 +189,7 @@ class JsonFormat(
           out.narrow.visitValue(
             writeMessage(
               out.subVisitor,
-              md.fields,
+              md,
               sd.PMessage(
                 md.fields.map(f => f -> sd.PEmpty).toMap
               ) // here PEmpty is not necessarily a missing *message* type
@@ -221,7 +237,7 @@ class JsonFormat(
               objv.narrow.visitValue(
                 writeMessage(
                   objv.narrow.subVisitor,
-                  md.fields,
+                  md,
                   kv.value(valueDescriptor).asInstanceOf[sd.PMessage]
                 ),
                 -1
@@ -244,7 +260,7 @@ class JsonFormat(
             arrv.narrow.visitValue(
               writeMessage(
                 arrv.subVisitor,
-                md.fields,
+                md,
                 x.asInstanceOf[sd.PMessage]
               ),
               -1
@@ -266,7 +282,7 @@ class JsonFormat(
       out.narrow.visitValue(
         writeMessage(
           out.subVisitor,
-          md.fields,
+          md,
           msg
         ),
         -1
@@ -373,7 +389,15 @@ class JsonFormat(
         )
 
     override def subVisitor: Visitor[?, ?] =
-      if fv.fd == null then NoOpVisitor else fv
+      if fv.fd == null then
+        NoOpVisitor
+      else if fv.fd.protoType.isTypeMessage then
+        val sd.ScalaType.Message(md) = (fv.fd.scalaType: @unchecked)
+        specialReaders.get(md) match
+          case None => fv
+          case Some(reader) => reader
+      else
+        fv
 
     override def visitValue(v: sd.PValue, index: Int): Unit =
       if v != sd.PEmpty then parsedFields += fv.fd -> v
@@ -422,7 +446,7 @@ class JsonFormat(
       then sd.PLong(asLong)
       else if pt.isTypeDouble then sd.PDouble(asDouble)
       else if pt.isTypeDouble then sd.PFloat(asDouble.toFloat)
-      else if pt.isTypeEnum && formatEnumsAsNumbers then
+      else if pt.isTypeEnum then
         val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
         ed.findValueByNumber(asLong.toInt) match
           case None     => sd.PEmpty // ignore unknown value
@@ -441,7 +465,7 @@ class JsonFormat(
     override def visitString(s: CharSequence, index: Int) =
       checkNotRepeated("string", index)
 
-      if fd.protoType.isTypeEnum && !formatEnumsAsNumbers then
+      if fd.protoType.isTypeEnum then
         val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
         ed.values.find(_.name == s.toString) match
           case None     => sd.PEmpty // ignore unknown value

@@ -37,3 +37,9 @@ message Message {
 
     bytes data = 100;
 }
+
+import "google/protobuf/timestamp.proto";
+
+message SpecialFormats {
+    google.protobuf.Timestamp ts = 1;
+}
