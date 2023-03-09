@@ -1,9 +1,9 @@
 package scalapb.ujson
 
 import scalapb.descriptors as sd
-import upickle.core.Visitor
-import upickle.core.ObjVisitor
 import upickle.core.ArrVisitor
+import upickle.core.ObjVisitor
+import upickle.core.Visitor
 
 trait SimpleVisitor[-T, +V] extends Visitor[T, V]:
   def expectedMsg: String

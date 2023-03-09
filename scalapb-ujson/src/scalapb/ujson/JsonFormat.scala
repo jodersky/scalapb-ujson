@@ -1,6 +1,5 @@
 package scalapb.ujson
 
-
 import com.google.protobuf.duration.Duration
 import com.google.protobuf.field_mask.FieldMask
 import com.google.protobuf.timestamp.Timestamp
@@ -19,11 +18,11 @@ class JsonFormatException(msg: String, cause: Throwable = null)
 // something went wrong reading JSON as a protobuf message
 class JsonReadException(
     val message: String,
-    val position: Int,
+    val position: Int, // position in the JSON input
     cause: Throwable = null
 ) extends JsonFormatException(s"$message (position: $position)", cause)
 
-object JsonFormat:
+object JsonFormatUtils:
 
   // descriptors of well-known messages
   final val TimestampDescriptor = Timestamp.scalaDescriptor
@@ -73,6 +72,9 @@ object JsonFormat:
         )
     }
 
+/** The default instance. */
+object JsonFormat extends JsonFormat()
+
 /** Utility for writing and reading ScalaPB-generated messages to and from JSON
   * via the ujson library.
   *
@@ -96,7 +98,7 @@ object JsonFormat:
   *   even if they are not set or correspond to the default protobuf value.
   *
   * @param formatEnumsAsNumbers
-  *   Default false. Use enum's numbers instead of their names.
+  *   Default false. Use enum values' numbers instead of their names.
   */
 class JsonFormat(
     val preserveProtoFieldNames: Boolean = true,
@@ -109,28 +111,41 @@ class JsonFormat(
     else
       // protoc<3 doesn't know about json_name, so we fill it in if it's not populated.
       fd.asProto.jsonName
-        .getOrElse(JsonFormat.camelify(fd.asProto.getName))
+        .getOrElse(JsonFormatUtils.camelify(fd.asProto.getName))
 
-  def write(message: scalapb.GeneratedMessage, indent: Int = -1, escapeUnicode: Boolean = false): String =
+  def write(
+      message: scalapb.GeneratedMessage,
+      indent: Int = -1,
+      escapeUnicode: Boolean = false
+  ): String =
     val writer = java.io.StringWriter()
     writeTo(message, writer, indent, escapeUnicode)
     writer.toString
 
-  def writeTo(message: scalapb.GeneratedMessage,
-              out: java.io.Writer,
-              indent: Int = -1,
-              escapeUnicode: Boolean = false): Unit =
+  def writeTo(
+      message: scalapb.GeneratedMessage,
+      out: java.io.Writer,
+      indent: Int = -1,
+      escapeUnicode: Boolean = false
+  ): Unit =
     Writer.transform(message, ujson.Renderer(out, indent, escapeUnicode))
 
-  def writeToOutputStream(message: scalapb.GeneratedMessage,
-                          out: java.io.OutputStream,
-                          indent: Int = -1,
-                          escapeUnicode: Boolean = false): Unit =
-    Writer.transform(message, ujson.BaseByteRenderer(out, indent, escapeUnicode))
+  def writeToOutputStream(
+      message: scalapb.GeneratedMessage,
+      out: java.io.OutputStream,
+      indent: Int = -1,
+      escapeUnicode: Boolean = false
+  ): Unit =
+    Writer.transform(
+      message,
+      ujson.BaseByteRenderer(out, indent, escapeUnicode)
+    )
 
-  def writeToByteArray(message: scalapb.GeneratedMessage,
-                       indent: Int = -1,
-                       escapeUnicode: Boolean = false): Array[Byte] =
+  def writeToByteArray(
+      message: scalapb.GeneratedMessage,
+      indent: Int = -1,
+      escapeUnicode: Boolean = false
+  ): Array[Byte] =
     val baos = java.io.ByteArrayOutputStream()
     writeToOutputStream(message, baos, indent, escapeUnicode)
     baos.toByteArray
@@ -156,30 +171,34 @@ class JsonFormat(
     val fields = message.value
 
     descriptor match
-      case JsonFormat.TimestampDescriptor =>
+      case JsonFormatUtils.TimestampDescriptor =>
         // PEmpty in a non-message field means that we're recursively completing with default values
         (fields(descriptor.findFieldByNumber(1).get): @unchecked) match
           case sd.PEmpty => out.visitString("1970-01-01T00:00:00Z", -1)
           case seconds: sd.PLong =>
-            val nanos = fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
+            val nanos =
+              fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
 
             // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-            val str = TimeUtils.writeTimestamp(Timestamp(seconds.value, nanos.value))
+            val str =
+              TimeUtils.writeTimestamp(Timestamp(seconds.value, nanos.value))
             out.visitString(str, -1)
 
-      case JsonFormat.DurationDescriptor =>
+      case JsonFormatUtils.DurationDescriptor =>
         (fields(descriptor.findFieldByNumber(1).get): @unchecked) match
           case sd.PEmpty => out.visitString("0s", -1)
           case seconds: sd.PLong =>
-            val nanos = fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
+            val nanos =
+              fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
 
             // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-            val str = TimeUtils.writeDuration(Duration(seconds.value, nanos.value))
+            val str =
+              TimeUtils.writeDuration(Duration(seconds.value, nanos.value))
             out.visitString(str, -1)
 
-      case JsonFormat.FieldMaskDescriptor =>
+      case JsonFormatUtils.FieldMaskDescriptor =>
         (fields(descriptor.findFieldByNumber(1).get): @unchecked) match
-          case sd.PEmpty => out.visitString("", -1)
+          case sd.PEmpty           => out.visitString("", -1)
           case paths: sd.PRepeated =>
             // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
             val str = FieldMaskUtil.toJsonString(
@@ -187,17 +206,15 @@ class JsonFormat(
             )
             out.visitString(str, -1)
 
-      case
-        JsonFormat.DoubleValueDescriptor |
-        JsonFormat.FloatValueDescriptor |
-        JsonFormat.Int32ValueDescriptor |
-        JsonFormat.Int64ValueDescriptor |
-        JsonFormat.UInt32ValueDescriptor |
-        JsonFormat.UInt64ValueDescriptor |
-        JsonFormat.BoolValueDescriptor |
-        JsonFormat.BytesValueDescriptor |
-        JsonFormat.StringValueDescriptor =>
-
+      case JsonFormatUtils.DoubleValueDescriptor |
+          JsonFormatUtils.FloatValueDescriptor |
+          JsonFormatUtils.Int32ValueDescriptor |
+          JsonFormatUtils.Int64ValueDescriptor |
+          JsonFormatUtils.UInt32ValueDescriptor |
+          JsonFormatUtils.UInt64ValueDescriptor |
+          JsonFormatUtils.BoolValueDescriptor |
+          JsonFormatUtils.BytesValueDescriptor |
+          JsonFormatUtils.StringValueDescriptor =>
         val fd = descriptor.findFieldByNumber(1).get
         val pv = fields(fd)
 
@@ -207,8 +224,7 @@ class JsonFormat(
             fd,
             fields(fd)
           )
-        else
-          out.visitNull(-1)
+        else out.visitNull(-1)
 
       case _ =>
         val objVisitor = out.visitObject(
@@ -239,34 +255,34 @@ class JsonFormat(
             -1
           )
         else
-          // This is a bit of a trick: in ScalaPB, PEmpty is only used for message
-          // fields, so this check would be redundant. However, in order to avoid
-          // code duplication, we recursively call this function with PEmpty
-          // meaning the absence of a value, even for primitive types. This allows
-          // us to recursively construct nested default messages, without the need
-          // of duplicating logic in a separate function.
-          if fd.protoType.isTypeMessage then
-            val sd.ScalaType.Message(md) = (fd.scalaType: @unchecked)
+        // This is a bit of a trick: in ScalaPB, PEmpty is only used for message
+        // fields, so this check would be redundant. However, in order to avoid
+        // code duplication, we recursively call this function with PEmpty
+        // meaning the absence of a value, even for primitive types. This allows
+        // us to recursively construct nested default messages, without the need
+        // of duplicating logic in a separate function.
+        if fd.protoType.isTypeMessage then
+          val sd.ScalaType.Message(md) = (fd.scalaType: @unchecked)
 
-            out.narrow.visitValue(
-              writeMessage(
-                out.subVisitor,
-                md,
-                sd.PMessage(
-                  md.fields.map(f => f -> sd.PEmpty).toMap
-                ) // here PEmpty is not necessarily a missing *message* type
-              ),
-              -1
-            )
-          else
-            out.narrow.visitValue(
-              writePrimitive(
-                out.subVisitor,
-                fd,
-                JsonFormat.defaultPrimitiveValue(fd)
-              ),
-              -1
-            )
+          out.narrow.visitValue(
+            writeMessage(
+              out.subVisitor,
+              md,
+              sd.PMessage(
+                md.fields.map(f => f -> sd.PEmpty).toMap
+              ) // here PEmpty is not necessarily a missing *message* type
+            ),
+            -1
+          )
+        else
+          out.narrow.visitValue(
+            writePrimitive(
+              out.subVisitor,
+              fd,
+              JsonFormatUtils.defaultPrimitiveValue(fd)
+            ),
+            -1
+          )
     case sd.PRepeated(xs) =>
       if xs.nonEmpty || includeDefaultValueFields then
         out.visitKeyValue(out.visitKey(-1).visitString(jsonName(fd), -1))
@@ -351,7 +367,7 @@ class JsonFormat(
       )
 
     case other =>
-      if includeDefaultValueFields || !fd.isOptional || !fd.file.isProto3 || JsonFormat
+      if includeDefaultValueFields || !fd.isOptional || !fd.file.isProto3 || JsonFormatUtils
           .defaultPrimitiveValue(fd) != other || fd.containingOneof.isDefined
       then
         out.visitKeyValue(out.visitKey(-1).visitString(jsonName(fd), -1))
@@ -372,26 +388,21 @@ class JsonFormat(
         if formatEnumsAsNumbers then out.visitInt32(e.number, -1)
         else out.visitString(e.name, -1)
 
-      case sd.PInt(v) => out.visitInt32(v, -1)
+      case sd.PInt(v)  => out.visitInt32(v, -1)
       case sd.PLong(v) => out.visitString(v.toString, -1)
       case sd.PDouble(v) =>
-        if v == Double.NaN then
-          out.visitString("NaN", -1)
+        if v == Double.NaN then out.visitString("NaN", -1)
         else if v == Double.PositiveInfinity then
           out.visitString("Infinity", -1)
         else if v == Double.NegativeInfinity then
           out.visitString("-Infinity", -1)
-        else
-          out.visitFloat64(v, -1)
+        else out.visitFloat64(v, -1)
       case sd.PFloat(v) =>
-        if v == Float.NaN then
-          out.visitString("NaN", -1)
-        else if v == Float.PositiveInfinity then
-          out.visitString("Infinity", -1)
+        if v == Float.NaN then out.visitString("NaN", -1)
+        else if v == Float.PositiveInfinity then out.visitString("Infinity", -1)
         else if v == Float.NegativeInfinity then
           out.visitString("-Infinity", -1)
-        else
-          out.visitFloat32(v, -1)
+        else out.visitFloat32(v, -1)
       case sd.PBoolean(v) =>
         if v then out.visitTrue(-1) else out.visitFalse(-1)
       case sd.PString(v) =>

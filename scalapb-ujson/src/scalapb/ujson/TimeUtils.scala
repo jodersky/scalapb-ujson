@@ -6,9 +6,9 @@
 
 package scalapb.ujson
 
-import java.text.ParseException
-import com.google.protobuf.timestamp.Timestamp
 import com.google.protobuf.duration.Duration
+import com.google.protobuf.timestamp.Timestamp
+import java.text.ParseException
 
 object TimeUtils:
 
@@ -32,8 +32,7 @@ object TimeUtils:
 
   def writeDuration(d: Duration): String =
     val r = StringBuilder()
-    if d.seconds < 0 || d.nanos < 0 then
-      r.append("-")
+    if d.seconds < 0 || d.nanos < 0 then r.append("-")
 
     r.append(d.seconds.abs)
     if d.nanos != 0 then
@@ -48,8 +47,7 @@ object TimeUtils:
       throw ParseException("Invalid duration string: " + value, 0)
 
     val (negative, number) =
-      if value.startsWith("-") then
-        (true, value.substring(1, value.length - 1))
+      if value.startsWith("-") then (true, value.substring(1, value.length - 1))
       else (false, value.substring(0, value.length - 1))
 
     val pointPosition = number.indexOf('.')
