@@ -1,25 +1,26 @@
 package scalapb.ujson
 
-import upickle.core.Visitor
-import upickle.core.ArrVisitor
-import upickle.core.ObjVisitor
-import scalapb.descriptors as sd
-import ujson.Transformer
-import scalapb.GeneratedMessage
 
-import com.google.protobuf.timestamp.Timestamp
 import com.google.protobuf.duration.Duration
 import com.google.protobuf.field_mask.FieldMask
+import com.google.protobuf.timestamp.Timestamp
+import com.google.protobuf.wrappers
+import scalapb.descriptors as sd
 import scalapb.FieldMaskUtil
+import scalapb.GeneratedMessage
+import ujson.Transformer
+import upickle.core.ArrVisitor
+import upickle.core.ObjVisitor
+import upickle.core.Visitor
 
-class JsonFormatException(msg: String, cause: Exception = null)
+class JsonFormatException(msg: String, cause: Throwable = null)
     extends Exception(msg, cause)
 
 // something went wrong reading JSON as a protobuf message
 class JsonReadException(
     val message: String,
     val position: Int,
-    cause: Exception = null
+    cause: Throwable = null
 ) extends JsonFormatException(s"$message (position: $position)", cause)
 
 object JsonFormat:
@@ -28,6 +29,16 @@ object JsonFormat:
   final val TimestampDescriptor = Timestamp.scalaDescriptor
   final val DurationDescriptor = Duration.scalaDescriptor
   final val FieldMaskDescriptor = FieldMask.scalaDescriptor
+
+  final val DoubleValueDescriptor = wrappers.DoubleValue.scalaDescriptor
+  final val FloatValueDescriptor = wrappers.FloatValue.scalaDescriptor
+  final val Int32ValueDescriptor = wrappers.Int32Value.scalaDescriptor
+  final val Int64ValueDescriptor = wrappers.Int64Value.scalaDescriptor
+  final val UInt32ValueDescriptor = wrappers.UInt32Value.scalaDescriptor
+  final val UInt64ValueDescriptor = wrappers.UInt64Value.scalaDescriptor
+  final val BoolValueDescriptor = wrappers.BoolValue.scalaDescriptor
+  final val BytesValueDescriptor = wrappers.BytesValue.scalaDescriptor
+  final val StringValueDescriptor = wrappers.StringValue.scalaDescriptor
 
   /** `this_is_snake_case => thisIsCamelCase` */
   def camelify(snake: String): String =
@@ -149,29 +160,58 @@ class JsonFormat(
 
     descriptor match
       case JsonFormat.TimestampDescriptor =>
-        val seconds = fields(descriptor.findFieldByNumber(0).get).asInstanceOf[sd.PLong]
-        val nanos = fields(descriptor.findFieldByNumber(1).get).asInstanceOf[sd.PInt]
+        // PEmpty in a non-message field means that we're recursively completing with default values
+        (fields(descriptor.findFieldByNumber(1).get): @unchecked) match
+          case sd.PEmpty => out.visitString("1970-01-01T00:00:00Z", -1)
+          case seconds: sd.PLong =>
+            val nanos = fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
 
-        // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-        val str = Timestamps.writeTimestamp(Timestamp(seconds.value, nanos.value))
-        out.visitString(str, -1)
+            // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
+            val str = Timestamps.writeTimestamp(Timestamp(seconds.value, nanos.value))
+            out.visitString(str, -1)
 
       case JsonFormat.DurationDescriptor =>
-        val seconds = fields(descriptor.findFieldByNumber(0).get).asInstanceOf[sd.PLong]
-        val nanos = fields(descriptor.findFieldByNumber(1).get).asInstanceOf[sd.PInt]
+        (fields(descriptor.findFieldByNumber(1).get): @unchecked) match
+          case sd.PEmpty => out.visitString("0s", -1)
+          case seconds: sd.PLong =>
+            val nanos = fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
 
-        // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-        val str = Durations.writeDuration(Duration(seconds.value, nanos.value))
-        out.visitString(str, -1)
+            // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
+            val str = Durations.writeDuration(Duration(seconds.value, nanos.value))
+            out.visitString(str, -1)
 
       case JsonFormat.FieldMaskDescriptor =>
-        val paths = fields(descriptor.findFieldByNumber(0).get).asInstanceOf[sd.PRepeated]
+        (fields(descriptor.findFieldByNumber(1).get): @unchecked) match
+          case sd.PEmpty => out.visitString("", -1)
+          case paths: sd.PRepeated =>
+            // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
+            val str = FieldMaskUtil.toJsonString(
+              FieldMask(paths.value.map(_.asInstanceOf[sd.PString].value))
+            )
+            out.visitString(str, -1)
 
-        // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-        val str = FieldMaskUtil.toJsonString(
-          FieldMask(paths.value.map(_.asInstanceOf[sd.PString].value))
-        )
-        out.visitString(str, -1)
+      case
+        JsonFormat.DoubleValueDescriptor |
+        JsonFormat.FloatValueDescriptor |
+        JsonFormat.Int32ValueDescriptor |
+        JsonFormat.Int64ValueDescriptor |
+        JsonFormat.UInt32ValueDescriptor |
+        JsonFormat.UInt64ValueDescriptor |
+        JsonFormat.BoolValueDescriptor |
+        JsonFormat.BytesValueDescriptor |
+        JsonFormat.StringValueDescriptor =>
+
+        val fd = descriptor.findFieldByNumber(1).get
+        val pv = fields(fd)
+
+        if pv != sd.PEmpty then
+          writePrimitive(
+            out,
+            fd,
+            fields(fd)
+          )
+        else
+          out.visitNull(-1)
 
       case _ =>
         val objVisitor = out.visitObject(
@@ -193,37 +233,43 @@ class JsonFormat(
       value: sd.PValue
   ): Unit = value match
     case sd.PEmpty =>
-      if includeDefaultValueFields && fd.containingOneof == None then
+      if includeDefaultValueFields then
         out.visitKeyValue(out.visitKey(-1).visitString(jsonName(fd), -1))
 
-        // This is a bit of a trick: in ScalaPB, PEmpty is only used for message
-        // fields, so this check would be redundant. However, in order to avoid
-        // code duplication, we recursively call this function with PEmpty
-        // meaning the absence of a value, even for primitive types. This allows
-        // us to recursively construct nested default messages, without the need
-        // of duplicating logic in a separate function.
-        if fd.protoType.isTypeMessage then
-          val sd.ScalaType.Message(md) = (fd.scalaType: @unchecked)
-
+        if fd.containingOneof.isDefined then
           out.narrow.visitValue(
-            writeMessage(
-              out.subVisitor,
-              md,
-              sd.PMessage(
-                md.fields.map(f => f -> sd.PEmpty).toMap
-              ) // here PEmpty is not necessarily a missing *message* type
-            ),
+            out.subVisitor.visitNull(-1),
             -1
           )
         else
-          out.narrow.visitValue(
-            writePrimitive(
-              out.subVisitor,
-              fd,
-              JsonFormat.defaultPrimitiveValue(fd)
-            ),
-            -1
-          )
+          // This is a bit of a trick: in ScalaPB, PEmpty is only used for message
+          // fields, so this check would be redundant. However, in order to avoid
+          // code duplication, we recursively call this function with PEmpty
+          // meaning the absence of a value, even for primitive types. This allows
+          // us to recursively construct nested default messages, without the need
+          // of duplicating logic in a separate function.
+          if fd.protoType.isTypeMessage then
+            val sd.ScalaType.Message(md) = (fd.scalaType: @unchecked)
+
+            out.narrow.visitValue(
+              writeMessage(
+                out.subVisitor,
+                md,
+                sd.PMessage(
+                  md.fields.map(f => f -> sd.PEmpty).toMap
+                ) // here PEmpty is not necessarily a missing *message* type
+              ),
+              -1
+            )
+          else
+            out.narrow.visitValue(
+              writePrimitive(
+                out.subVisitor,
+                fd,
+                JsonFormat.defaultPrimitiveValue(fd)
+              ),
+              -1
+            )
     case sd.PRepeated(xs) =>
       if xs.nonEmpty || includeDefaultValueFields then
         out.visitKeyValue(out.visitKey(-1).visitString(jsonName(fd), -1))

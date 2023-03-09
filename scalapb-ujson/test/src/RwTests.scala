@@ -53,7 +53,12 @@ object RwTests extends TestSuite:
              |  "repeated_nested": [],
              |  "messages": {},
              |  "nested_map": {},
-             |  "data": ""
+             |  "either_1": null,
+             |  "either_2": null,
+             |  "either_3": null,
+             |  "either_4": null,
+             |  "data": "",
+             |  "optint": null
              |}
              |""".stripMargin
         assertEqual(fmt, msg, expected, checkRead = false) // can't easily check reads with defaults included
@@ -255,5 +260,54 @@ object RwTests extends TestSuite:
         data = com.google.protobuf.ByteString.copyFromUtf8("hello, world")
       )
       assertEqual(fmt, msg, """{"data":"aGVsbG8sIHdvcmxk"}""")
+    }
+    test("optional") {
+      val fmt = JsonFormat(
+        includeDefaultValueFields = false
+      )
+      val msg = protos.Message(optint = Some(0))
+      assertEqual(fmt, msg, """{"optint": 0}""")
+    }
+    test("specials") {
+      test("no defaults") {
+        val fmt = JsonFormat(
+          includeDefaultValueFields = false
+        )
+
+        val msg = protos.SpecialFormats()
+        assertEqual(fmt, msg, """{}""")
+      }
+      test("defaults") {
+        val fmt = JsonFormat(
+          includeDefaultValueFields = true
+        )
+
+        val msg = protos.SpecialFormats()
+        assertEqual(fmt, msg, """{"ts":"1970-01-01T00:00:00Z","duration":"0s","wrapper": null, "fm":""}""", checkRead = false)
+      }
+      test("values") {
+        val fmt = JsonFormat(
+          includeDefaultValueFields = false
+        )
+
+        val msg = protos.SpecialFormats()
+          .withTs(
+            com.google.protobuf.timestamp.Timestamp(1678372591, 42)
+          )
+          .withDuration(
+            com.google.protobuf.duration.Duration(1000, 42)
+          )
+          .withFm(
+            com.google.protobuf.field_mask.FieldMask(Seq("a", "b.c"))
+          )
+        val expected =
+          """|{
+             |  "ts":"2023-03-09T14:36:31.000000042Z",
+             |  "duration":"1000.000000042s",
+             |  "fm":"a,b.c"
+             |}
+             |""".stripMargin
+        assertEqual(fmt, msg, expected)
+      }
     }
   }

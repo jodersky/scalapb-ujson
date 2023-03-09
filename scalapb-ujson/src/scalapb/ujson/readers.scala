@@ -4,6 +4,7 @@ import upickle.core.Visitor
 import upickle.core.ArrVisitor
 import upickle.core.ObjVisitor
 import scalapb.descriptors as sd
+import scalapb.FieldMaskUtil
 
 class Reader(md: sd.Descriptor) extends SimpleVisitor[sd.PValue, sd.PMessage]:
   override val expectedMsg: String = "expected JSON object"
@@ -113,13 +114,38 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
       ed.values.find(_.name == s.toString) match
         case None     => sd.PEmpty // ignore unknown value
         case Some(ev) => sd.PEnum(ev)
-    else if fd.protoType.isTypeString then sd.PString(s.toString())
+    else if fd.protoType.isTypeString then
+      sd.PString(s.toString())
     else if fd.protoType.isTypeBytes then
       sd.PByteString(
         com.google.protobuf.ByteString.copyFrom(
           java.util.Base64.getDecoder().decode(s.toString)
         )
       )
+    else if fd.protoType.isTypeMessage then
+      val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
+
+      def specialParse(tpe: String)(action: => sd.PValue) =
+        try
+          action
+        catch
+          case t: Throwable =>
+            throw JsonReadException(s"error for protobuf fiel '${fd.fullName}', parsing string as $tpe: ${t.getMessage}", index, t)
+
+      d match
+        case JsonFormat.TimestampDescriptor =>
+          specialParse("timestamp") {
+            Timestamps.parseTimestamp(s.toString).toPMessage
+          }
+        case JsonFormat.DurationDescriptor =>
+          specialParse("duration") {
+            Durations.parseDuration(s.toString).toPMessage
+          }
+        case JsonFormat.FieldMaskDescriptor =>
+          specialParse("fieldmask") {
+            FieldMaskUtil.fromJsonString(s.toString).toPMessage
+          }
+        case _ => unexpectedType("string", index)
     else unexpectedType("string", index)
 
   override def visitNull(index: Int) =

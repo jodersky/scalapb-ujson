@@ -36,4 +36,18 @@ message Message {
     }
 
     bytes data = 100;
+
+    optional int32 optint = 16;
+}
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/field_mask.proto";
+
+message SpecialFormats {
+    google.protobuf.Timestamp ts = 1;
+    google.protobuf.Duration duration = 2;
+    google.protobuf.Int32Value wrapper = 3;
+    google.protobuf.FieldMask fm = 4;
 }
