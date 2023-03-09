@@ -1,8 +1,22 @@
-import mill._, scalalib._, scalafmt._, scalajslib._, scalanativelib._
+import mill._, scalalib._, scalafmt._, scalajslib._, scalanativelib._, publish._
 import $ivy.`com.lihaoyi::mill-contrib-scalapblib:$MILL_VERSION`
 import contrib.scalapblib.ScalaPBModule
 
-trait MainModule extends ScalaModule with ScalafmtModule {
+trait Publish extends PublishModule {
+  def publishVersion = "0.1.1"
+  def pomSettings = PomSettings(
+    description = "scalapb-ujson",
+    organization = "io.crashbox",
+    url = "https://github.com/jodersky/scalapb-ujson",
+    licenses = Seq(License.`Apache-2.0`),
+    versionControl = VersionControl.github("jodersky", "scalapb-ujson"),
+    developers = Seq(
+      Developer("jodersky", "Jakob Odersky", "https://github.com/jodersky")
+    )
+  )
+}
+
+trait MainModule extends ScalaModule with ScalafmtModule with Publish {
   def scalaVersion = "3.2.2"
 
   def ivyDeps = Agg(
@@ -10,6 +24,8 @@ trait MainModule extends ScalaModule with ScalafmtModule {
     ivy"com.thesamet.scalapb::scalapb-runtime::0.11.12",
     ivy"io.github.cquiroz::scala-java-time::2.5.0"
   )
+
+  def artifactName = "scalapb-ujson"
 
   trait UTest extends TestModule with ScalaPBModule {
     def scalaPBGrpc = false
@@ -23,7 +39,7 @@ trait MainModule extends ScalaModule with ScalafmtModule {
   }
 }
 
-object `scalapb-ujson` extends MainModule {
+object `scalapb-ujson` extends Module {
   object jvm extends MainModule {
     def millSourcePath = super.millSourcePath / os.up
     object test extends Tests with UTest
