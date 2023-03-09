@@ -219,50 +219,6 @@ object RwTests extends TestSuite:
 
         assertEqual(fmt, msg, expected)
       }
-
-      test("kv-pairs") {
-        val fmt = JsonFormat(
-          includeDefaultValueFields = false,
-          formatMapEntriesAsKeyValuePairs = true
-        )
-        val expected =
-          """|{
-             |  "messages": [
-             |    {
-             |      "key": 1000,
-             |      "value": "hello"
-             |    },
-             |    {
-             |      "key": 1001,
-             |      "value": "world"
-             |    }
-             |  ],
-             |  "nested_map": [
-             |    {
-             |      "key": 1,
-             |      "value": {
-             |        "inner": {
-             |            "payload": "hello"
-             |         }
-             |      }
-             |    },
-             |    {
-             |      "key": 2,
-             |      "value": {
-             |        "inner": {
-             |            "payload": "world"
-             |         }
-             |      }
-             |    },
-             |    {
-             |      "key": 3,
-             |      "value": {}
-             |    }
-             |  ]
-             |}
-             |""".stripMargin
-        assertEqual(fmt, msg, expected)
-      }
     }
     test("oneof") {
       val fmt = JsonFormat(

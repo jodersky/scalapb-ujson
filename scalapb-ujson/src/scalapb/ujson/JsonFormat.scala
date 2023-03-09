@@ -76,18 +76,11 @@ object JsonFormat:
   *
   * @param formatEnumsAsNumbers
   *   Default false. Use enum's numbers instead of their names.
-  *
-  * @param formatMapEntriesAsKeyValuePairs
-  *   Default false. By default, maps are serialized as JSON objects, with the
-  *   JSON keys being the stringified form of the protobuf keys (protobuf only
-  *   allows primitive types in map keys). If set, this will instead serialize
-  *   maps as objects with `{"key":..., "value":...}` attributes.
   */
 class JsonFormat(
     val preserveProtoFieldNames: Boolean = true,
     val includeDefaultValueFields: Boolean = true,
-    val formatEnumsAsNumbers: Boolean = false,
-    val formatMapEntriesAsKeyValuePairs: Boolean = false
+    val formatEnumsAsNumbers: Boolean = false
 ):
 
   private def jsonName(fd: sd.FieldDescriptor): String =
@@ -130,15 +123,18 @@ class JsonFormat(
 
   object Writer extends Transformer[scalapb.GeneratedMessage]:
     override def transform[T](j: GeneratedMessage, f: Visitor[?, T]): T =
-      writeMessage(f, j.companion.scalaDescriptor.fields, j.toPMessage)
+      writeMessage(f, j.companion.scalaDescriptor, j.toPMessage)
 
+  // val com.google.protobuf.timestamp.Timestamp.scalaDescriptor
+
+  // PMessage doesn't have a field order, so we pass it in externally
   private def writeMessage[V](
       out: Visitor[_, V],
-      orderedFields: Seq[
-        sd.FieldDescriptor
-      ], // PMessage doesn't have a field order, so we pass it in externally
+      descriptor: sd.Descriptor,
       message: sd.PMessage
   ): V =
+
+    val orderedFields: Seq[sd.FieldDescriptor] = descriptor.fields
     val fields = message.value
     val objVisitor = out.visitObject(
       length = fields.size,
@@ -173,7 +169,7 @@ class JsonFormat(
           out.narrow.visitValue(
             writeMessage(
               out.subVisitor,
-              md.fields,
+              md,
               sd.PMessage(
                 md.fields.map(f => f -> sd.PEmpty).toMap
               ) // here PEmpty is not necessarily a missing *message* type
@@ -193,7 +189,7 @@ class JsonFormat(
       if xs.nonEmpty || includeDefaultValueFields then
         out.visitKeyValue(out.visitKey(-1).visitString(jsonName(fd), -1))
 
-        if fd.isMapField && !formatMapEntriesAsKeyValuePairs then
+        if fd.isMapField then
           val mapEntryDescriptor =
             fd.scalaType.asInstanceOf[sd.ScalaType.Message].descriptor
           val keyDescriptor = mapEntryDescriptor.findFieldByNumber(1).get
@@ -221,7 +217,7 @@ class JsonFormat(
               objv.narrow.visitValue(
                 writeMessage(
                   objv.narrow.subVisitor,
-                  md.fields,
+                  md,
                   kv.value(valueDescriptor).asInstanceOf[sd.PMessage]
                 ),
                 -1
@@ -244,7 +240,7 @@ class JsonFormat(
             arrv.narrow.visitValue(
               writeMessage(
                 arrv.subVisitor,
-                md.fields,
+                md,
                 x.asInstanceOf[sd.PMessage]
               ),
               -1
@@ -266,7 +262,7 @@ class JsonFormat(
       out.narrow.visitValue(
         writeMessage(
           out.subVisitor,
-          md.fields,
+          md,
           msg
         ),
         -1
@@ -343,9 +339,9 @@ class JsonFormat(
         jsonableKeys: Boolean,
         index: Int
     ): ObjVisitor[sd.PValue, sd.PMessage] =
-      MessageReader(md, false)
+      MessageReader(md)
 
-  private class MessageReader(md: sd.Descriptor, kvOnly: Boolean)
+  private class MessageReader(md: sd.Descriptor)
       extends ObjVisitor[sd.PValue, sd.PMessage]:
     private val parsedFields =
       collection.mutable.Map.empty[sd.FieldDescriptor, sd.PValue]
@@ -366,11 +362,6 @@ class JsonFormat(
       fieldMap.get(key) match
         case Some(d) => fv.fd = d
         case None    => fv.fd = null
-      if kvOnly && !(key == "key" || key == "value") then
-        throw JsonReadException(
-          s"only JSON objects with keys 'key' and 'value' are allowed in maps; found '$key'",
-          keyIndex
-        )
 
     override def subVisitor: Visitor[?, ?] =
       if fv.fd == null then NoOpVisitor else fv
@@ -462,44 +453,30 @@ class JsonFormat(
         length: Int,
         index: Int
     ): ObjVisitor[sd.PValue, sd.PValue] =
-      if fd.isMapField && !formatMapEntriesAsKeyValuePairs then
+      if fd.isMapField then
         MapReader(length, fd)
-      else if fd.protoType.isTypeMessage && !fd.isMapField then
+      else if fd.protoType.isTypeMessage then
         checkNotRepeated("object", index)
         val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
-        MessageReader(d, false)
+        MessageReader(d)
       else unexpectedType("object", index)
 
     override def visitArray(
         length: Int,
         index: Int
     ): ArrVisitor[sd.PValue, sd.PValue] =
-      if fd.isMapField && formatMapEntriesAsKeyValuePairs then
-        RepeatedReader(length, fd, true)
-      else if fd.isRepeated && !fd.isMapField then
-        RepeatedReader(length, fd, false)
+      if fd.isRepeated && !fd.isMapField then
+        RepeatedReader(length, fd)
       else unexpectedType("array", index)
 
   end FieldVisitor
 
-  private class KvOnlyVisitor(fd: sd.FieldDescriptor)
-      extends SimpleVisitor[sd.PValue, sd.PValue]:
-    override def expectedMsg: String = "expected object"
-    override def visitObject(
-        length: Int,
-        jsonableKeys: Boolean,
-        index: Int
-    ): ObjVisitor[sd.PValue, sd.PValue] =
-      val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
-      MessageReader(d, true)
-
-  class RepeatedReader(sizeHint: Int, fd: sd.FieldDescriptor, kvOnly: Boolean)
+  private class RepeatedReader(sizeHint: Int, fd: sd.FieldDescriptor)
       extends ArrVisitor[sd.PValue, sd.PValue]:
     private val buffer = collection.mutable.ArrayBuffer.empty[sd.PValue]
     buffer.sizeHint(sizeHint)
 
-    val fv =
-      if kvOnly then KvOnlyVisitor(fd) else FieldVisitor(fd, inArray = true)
+    val fv = FieldVisitor(fd, inArray = true)
 
     override def subVisitor: Visitor[?, ?] = fv
 
