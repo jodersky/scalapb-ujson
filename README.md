@@ -82,13 +82,14 @@ The full example source code is contained in `example/`. You can run it with
 
 ## Documentation
 
-**The central element of scalapb-ujson is the [`scalapb.usjon.JsonFormat`](???)
+**The central element of scalapb-ujson is the
+[`scalapb.usjon.JsonFormat`](http://jodersky.github.io/scalapb-ujson/scalapb/ujson/JsonFormat.html)
 object.**
 
 It has several `write` and `read` methods, which allow you to convert between
 ScalaPB messages and JSON.
 
-Have a look at the [API docs](???).
+Have a look at the [API docs](http://jodersky.github.io/scalapb-ujson).
 
 The conversion methods support writing and reading the resulting JSON to/from
 various outputs/inputs. For example, the simplest `write` creates a string,

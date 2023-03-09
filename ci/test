@@ -1,0 +1,6 @@
+#!/bin/bash
+
+set -o errexit
+
+./mill -i __.test
+./mill -i example
