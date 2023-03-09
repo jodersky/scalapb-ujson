@@ -1,5 +1,7 @@
 # scalapb-ujson
 
+[![stability: firm](https://img.shields.io/badge/stability-firm-silver)](https://www.crashbox.io/stability.html)
+
 Read and write ScalaPB messages to and from JSON.
 
 This project is a library that strives to implement the [Canonical Protobuf to
@@ -194,9 +196,9 @@ representation.
 
 - [gRPC Gateway](https://github.com/grpc-ecosystem/grpc-gateway). scalapb-ujson
   integrates directly with ScalaPB and is not designed to be a converter of
-  protobuf on the wire. In case you have a mature service architecture the the
-  gRPC gateway is a viable alternative. scalapb-ujson is only designed for
-  standalone applications (and doesn't support gRPC service mapping).
+  protobuf on the wire. In case you have a mature service architecture then gRPC
+  gateway is a viable alternative. scalapb-ujson is only designed for standalone
+  applications (and doesn't support gRPC service mapping).
 
 ## Building
 
