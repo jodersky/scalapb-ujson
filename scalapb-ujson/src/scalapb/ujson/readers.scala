@@ -61,7 +61,7 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
       else if fd.isRepeated then s"repeated ${fd.protoType}"
       else fd.protoType
     throw JsonReadException(
-      s"Protobuf message field '${fd.fullName}' of type ${fieldTpe} does not accept a JSON ${tpe}",
+      s"protobuf message field '${fd.fullName}' of type ${fieldTpe} does not accept a JSON ${tpe}",
       index
     )
 

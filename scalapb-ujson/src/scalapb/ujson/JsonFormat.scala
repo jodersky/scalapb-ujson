@@ -73,7 +73,7 @@ object JsonFormatUtils:
     }
 
 /** The default instance. */
-object JsonFormat extends JsonFormat()
+object JsonFormat extends JsonFormat(true, true, false)
 
 /** Utility for writing and reading ScalaPB-generated messages to and from JSON
   * via the ujson library.

@@ -31,7 +31,7 @@ object NegTests extends TestSuite:
              |""".stripMargin
         )
       )
-      assert(ex.message == "Protobuf message field 'Message.number' of type TYPE_INT32 does not accept a JSON array")
+      assert(ex.message == "protobuf message field 'Message.number' of type TYPE_INT32 does not accept a JSON array")
     }
     test("repeated2") {
       val fmt = JsonFormat()
@@ -44,7 +44,7 @@ object NegTests extends TestSuite:
              |""".stripMargin
         )
       )
-      assert(ex.message == "Protobuf message field 'Message.repeated_string' of type repeated TYPE_STRING does not accept a JSON string")
+      assert(ex.message == "protobuf message field 'Message.repeated_string' of type repeated TYPE_STRING does not accept a JSON string")
     }
     test("repeated3") {
       val fmt = JsonFormat()
@@ -57,7 +57,7 @@ object NegTests extends TestSuite:
              |""".stripMargin
         )
       )
-      assert(ex.message == "Protobuf message field 'Message.repeated_string' of type repeated TYPE_STRING does not accept a JSON object")
+      assert(ex.message == "protobuf message field 'Message.repeated_string' of type repeated TYPE_STRING does not accept a JSON object")
     }
     test("default map") {
       val fmt = JsonFormat()
@@ -86,7 +86,7 @@ object NegTests extends TestSuite:
                |""".stripMargin
           )
         )
-        assert(ex.message == "Protobuf message field 'Message.MessagesEntry.value' of type TYPE_STRING does not accept a JSON object")
+        assert(ex.message == "protobuf message field 'Message.MessagesEntry.value' of type TYPE_STRING does not accept a JSON object")
       }
       test("wrong type") {
         val ex = intercept[JsonReadException](
@@ -97,7 +97,7 @@ object NegTests extends TestSuite:
                |""".stripMargin
           )
         )
-        assert(ex.message == "Protobuf message field 'Message.messages' of type map does not accept a JSON array")
+        assert(ex.message == "protobuf message field 'Message.messages' of type map does not accept a JSON array")
       }
     }
   }
