@@ -7,6 +7,11 @@ import scalapb.descriptors as sd
 import ujson.Transformer
 import scalapb.GeneratedMessage
 
+import com.google.protobuf.timestamp.Timestamp
+import com.google.protobuf.duration.Duration
+import com.google.protobuf.field_mask.FieldMask
+import scalapb.FieldMaskUtil
+
 class JsonFormatException(msg: String, cause: Exception = null)
     extends Exception(msg, cause)
 
@@ -18,6 +23,11 @@ class JsonReadException(
 ) extends JsonFormatException(s"$message (position: $position)", cause)
 
 object JsonFormat:
+
+  // descriptors of well-known messages
+  final val TimestampDescriptor = Timestamp.scalaDescriptor
+  final val DurationDescriptor = Duration.scalaDescriptor
+  final val FieldMaskDescriptor = FieldMask.scalaDescriptor
 
   /** `this_is_snake_case => thisIsCamelCase` */
   def camelify(snake: String): String =
@@ -127,26 +137,55 @@ class JsonFormat(
 
   // val com.google.protobuf.timestamp.Timestamp.scalaDescriptor
 
-  // PMessage doesn't have a field order, so we pass it in externally
+
   private def writeMessage[V](
       out: Visitor[_, V],
       descriptor: sd.Descriptor,
       message: sd.PMessage
   ): V =
-
+    // PMessage doesn't have a field order, so we use the descriptor to look them up
     val orderedFields: Seq[sd.FieldDescriptor] = descriptor.fields
     val fields = message.value
-    val objVisitor = out.visitObject(
-      length = fields.size,
-      jsonableKeys = true, // no idea what this does,
-      -1
-    )
 
-    for descriptor <- orderedFields do
-      val value = fields(descriptor)
-      writeField(objVisitor, descriptor, value)
+    descriptor match
+      case JsonFormat.TimestampDescriptor =>
+        val seconds = fields(descriptor.findFieldByNumber(0).get).asInstanceOf[sd.PLong]
+        val nanos = fields(descriptor.findFieldByNumber(1).get).asInstanceOf[sd.PInt]
 
-    objVisitor.visitEnd(-1)
+        // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
+        val str = Timestamps.writeTimestamp(Timestamp(seconds.value, nanos.value))
+        out.visitString(str, -1)
+
+      case JsonFormat.DurationDescriptor =>
+        val seconds = fields(descriptor.findFieldByNumber(0).get).asInstanceOf[sd.PLong]
+        val nanos = fields(descriptor.findFieldByNumber(1).get).asInstanceOf[sd.PInt]
+
+        // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
+        val str = Durations.writeDuration(Duration(seconds.value, nanos.value))
+        out.visitString(str, -1)
+
+      case JsonFormat.FieldMaskDescriptor =>
+        val paths = fields(descriptor.findFieldByNumber(0).get).asInstanceOf[sd.PRepeated]
+
+        // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
+        val str = FieldMaskUtil.toJsonString(
+          FieldMask(paths.value.map(_.asInstanceOf[sd.PString].value))
+        )
+        out.visitString(str, -1)
+
+      case _ =>
+        val objVisitor = out.visitObject(
+          length = fields.size,
+          jsonableKeys = true, // no idea what this does,
+          -1
+        )
+
+        for descriptor <- orderedFields do
+          val value = fields(descriptor)
+          writeField(objVisitor, descriptor, value)
+
+        objVisitor.visitEnd(-1)
+  end writeMessage
 
   private def writeField(
       out: ObjVisitor[_, _],
