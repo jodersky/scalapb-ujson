@@ -39,7 +39,7 @@ object RwTests extends TestSuite:
         val expected =
           """|{
              |  "number": 0,
-             |  "long_number": 0,
+             |  "long_number": "0",
              |  "dbl": 0,
              |  "str": "",
              |  "flag": false,
@@ -72,7 +72,7 @@ object RwTests extends TestSuite:
       )
       val expected =
         """|{
-           |  "longNumber": 2,
+           |  "longNumber": "2",
            |  "repeatedString": ["a", "b"]
            |}
            |""".stripMargin
@@ -93,7 +93,7 @@ object RwTests extends TestSuite:
         val expected =
           """|{
              |  "number": 42,
-             |  "long_number": 42,
+             |  "long_number": "42",
              |  "dbl": 2.3,
              |  "str": "hello, world",
              |  "flag": true

@@ -18,7 +18,7 @@ object NegTests extends TestSuite:
              |""".stripMargin
         )
       )
-      assert(ex.message == "Protobuf message field 'Message.number' of type TYPE_INT32 does not accept a JSON string")
+      assert(ex.message == "field 'Message.number': string is not a valid number")
     }
     test("repeated") {
       val fmt = JsonFormat()

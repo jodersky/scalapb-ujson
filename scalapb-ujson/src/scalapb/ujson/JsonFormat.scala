@@ -146,9 +146,6 @@ class JsonFormat(
     override def transform[T](j: GeneratedMessage, f: Visitor[?, T]): T =
       writeMessage(f, j.companion.scalaDescriptor, j.toPMessage)
 
-  // val com.google.protobuf.timestamp.Timestamp.scalaDescriptor
-
-
   private def writeMessage[V](
       out: Visitor[_, V],
       descriptor: sd.Descriptor,
@@ -372,31 +369,29 @@ class JsonFormat(
   ): V =
     value match {
       case sd.PEnum(e) =>
-        // config.formatRegistry.getEnumWriter(e.containingEnum) match {
-        //   case Some(writer) => writer(this, e)
-        //   case None =>
-        //     if (config.isFormattingEnumsAsNumber) JInt(e.number)
-        //     else JString(e.name)
-        // }
         if formatEnumsAsNumbers then out.visitInt32(e.number, -1)
         else out.visitString(e.name, -1)
 
-      case sd.PInt(v) if fd.protoType.isTypeUint32 =>
-        out.visitInt64(unsignedInt(v), -1)
-      case sd.PInt(v) if fd.protoType.isTypeFixed32 =>
-        out.visitInt64(unsignedInt(v), -1)
-      case sd.PInt(v) =>
-        out.visitInt32(v, -1)
-      case sd.PLong(v) if fd.protoType.isTypeUint64 =>
-        out.visitUInt64(v, -1)
-      case sd.PLong(v) if fd.protoType.isTypeFixed64 =>
-        out.visitUInt64(v, -1)
-      case sd.PLong(v) =>
-        out.visitInt64(v, -1)
+      case sd.PInt(v) => out.visitInt32(v, -1)
+      case sd.PLong(v) => out.visitString(v.toString, -1)
       case sd.PDouble(v) =>
-        out.visitFloat64(v, -1)
+        if v == Double.NaN then
+          out.visitString("NaN", -1)
+        else if v == Double.PositiveInfinity then
+          out.visitString("Infinity", -1)
+        else if v == Double.NegativeInfinity then
+          out.visitString("-Infinity", -1)
+        else
+          out.visitFloat64(v, -1)
       case sd.PFloat(v) =>
-        out.visitFloat32(v, -1)
+        if v == Float.NaN then
+          out.visitString("NaN", -1)
+        else if v == Float.PositiveInfinity then
+          out.visitString("Infinity", -1)
+        else if v == Float.NegativeInfinity then
+          out.visitString("-Infinity", -1)
+        else
+          out.visitFloat32(v, -1)
       case sd.PBoolean(v) =>
         if v then out.visitTrue(-1) else out.visitFalse(-1)
       case sd.PString(v) =>

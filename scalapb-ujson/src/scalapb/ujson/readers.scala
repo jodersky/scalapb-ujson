@@ -77,26 +77,6 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
   override def visitTrue(index: Int) = visitBool(true, index)
   override def visitFalse(index: Int) = visitBool(false, index)
 
-  // TODO: improve precision loss
-  private def parseNumber(str: String, index: Int) =
-    val pt = fd.protoType
-
-    val asDouble = str.toDouble
-    val asLong = asDouble.toLong
-
-    if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32
-    then sd.PInt(asLong.toInt)
-    else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64
-    then sd.PLong(asLong)
-    else if pt.isTypeDouble then sd.PDouble(asDouble)
-    else if pt.isTypeDouble then sd.PFloat(asDouble.toFloat)
-    else if pt.isTypeEnum then
-      val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
-      ed.findValueByNumber(asLong.toInt) match
-        case None     => sd.PEmpty // ignore unknown value
-        case Some(ev) => sd.PEnum(ev)
-    else unexpectedType("number", index)
-
   override def visitFloat64StringParts(
       s: CharSequence,
       decIndex: Int,
@@ -104,25 +84,75 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
       index: Int
   ) =
     checkNotRepeated("number", index)
-    parseNumber(s.toString, index)
+
+    val pt = fd.protoType
+
+    // TODO: we always parse to double and long, but this is not always needed and could be done more efficiently
+    val asDouble = s.toString.toDouble
+    val asLong = asDouble.toLong
+
+    if fd.protoType.isTypeEnum then
+      val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
+      ed.findValueByNumber(s.toString.toLong.toInt) match
+        case None     => sd.PEmpty // ignore unknown value
+        case Some(ev) => sd.PEnum(ev)
+    else if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32 then
+      sd.PInt(asLong.toInt)
+    else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64 then
+      sd.PLong(asLong)
+    else if pt.isTypeDouble then
+      sd.PDouble(asDouble)
+    else if pt.isTypeFloat then
+      sd.PFloat(asDouble.toFloat)
+    else if pt.isTypeMessage then
+      val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
+      d match
+        case JsonFormat.Int32ValueDescriptor | JsonFormat.UInt32ValueDescriptor =>
+          sd.PMessage(Map(d.fields(0) -> sd.PInt(asLong.toInt)))
+        case JsonFormat.Int64ValueDescriptor | JsonFormat.UInt64ValueDescriptor =>
+          sd.PMessage(Map(d.fields(0) -> sd.PLong(asLong)))
+        case JsonFormat.FloatValueDescriptor =>
+          sd.PMessage(Map(d.fields(0) -> sd.PFloat(asDouble.toFloat)))
+        case JsonFormat.DoubleValueDescriptor =>
+          sd.PMessage(Map(d.fields(0) -> sd.PDouble(asDouble)))
+        case _ =>
+          unexpectedType("number", index)
+    else unexpectedType("number", index)
 
   override def visitString(s: CharSequence, index: Int) =
     checkNotRepeated("string", index)
 
-    if fd.protoType.isTypeEnum then
+    def parseDouble() = try
+      s.toString.toDouble
+    catch
+      case _ => throw JsonReadException(s"field '${fd.fullName}': string is not a valid number", index)
+
+    def parseLong() = parseDouble().toLong
+
+    val pt = fd.protoType
+
+    if pt.isTypeEnum then
       val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
       ed.values.find(_.name == s.toString) match
         case None     => sd.PEmpty // ignore unknown value
         case Some(ev) => sd.PEnum(ev)
-    else if fd.protoType.isTypeString then
+    else if pt.isTypeString then
       sd.PString(s.toString())
-    else if fd.protoType.isTypeBytes then
+    else if pt.isTypeBytes then
       sd.PByteString(
         com.google.protobuf.ByteString.copyFrom(
           java.util.Base64.getDecoder().decode(s.toString)
         )
       )
-    else if fd.protoType.isTypeMessage then
+    else if pt.isTypeInt32 || pt.isTypeSint32 || pt.isTypeUint32 || pt.isTypeFixed32 || pt.isTypeSfixed32 then
+      sd.PInt(parseLong().toInt)
+    else if pt.isTypeInt64 || pt.isTypeSint64 || pt.isTypeUint64 || pt.isTypeFixed64 || pt.isTypeSfixed64 then
+      sd.PLong(parseLong())
+    else if pt.isTypeDouble then
+      sd.PDouble(parseDouble())
+    else if pt.isTypeFloat then
+      sd.PFloat(parseDouble().toFloat)
+    else if pt.isTypeMessage then
       val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
 
       def specialParse(tpe: String)(action: => sd.PValue) =
@@ -130,7 +160,7 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
           action
         catch
           case t: Throwable =>
-            throw JsonReadException(s"error for protobuf fiel '${fd.fullName}', parsing string as $tpe: ${t.getMessage}", index, t)
+            throw JsonReadException(s"error for protobuf field '${fd.fullName}', parsing string as $tpe: ${t.getMessage}", index, t)
 
       d match
         case JsonFormat.TimestampDescriptor =>
@@ -145,6 +175,14 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
           specialParse("fieldmask") {
             FieldMaskUtil.fromJsonString(s.toString).toPMessage
           }
+        case JsonFormat.Int32ValueDescriptor | JsonFormat.UInt32ValueDescriptor =>
+          sd.PMessage(Map(d.fields(0) -> sd.PInt(parseLong().toInt)))
+        case JsonFormat.Int64ValueDescriptor | JsonFormat.UInt64ValueDescriptor =>
+          sd.PMessage(Map(d.fields(0) -> sd.PLong(parseLong())))
+        case JsonFormat.FloatValueDescriptor =>
+          sd.PMessage(Map(d.fields(0) -> sd.PFloat(parseDouble().toFloat)))
+        case JsonFormat.DoubleValueDescriptor =>
+          sd.PMessage(Map(d.fields(0) -> sd.PDouble(parseDouble())))
         case _ => unexpectedType("string", index)
     else unexpectedType("string", index)
 
