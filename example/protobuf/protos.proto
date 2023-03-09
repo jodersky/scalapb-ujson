@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+message Request {
+  string name = 1;
+  int32 number = 2;
+
+  enum State {
+    UNKNOWN = 0;
+    OK = 1;
+    ERROR = 2;
+  }
+  State state = 3;
+
+  message Attr {
+    string a = 1;
+    string b = 2;
+  }
+  map<string, Attr> attributes = 4;
+}

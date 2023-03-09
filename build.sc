@@ -39,3 +39,9 @@ object `scalapb-ujson` extends MainModule {
     object test extends Tests with UTest
   }
 }
+
+object example extends ScalaModule with ScalaPBModule {
+  def scalaVersion = "3.2.2"
+  def scalaPBVersion = "0.11.12"
+  def moduleDeps = Seq(`scalapb-ujson`.jvm)
+}
