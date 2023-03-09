@@ -413,7 +413,7 @@ class JsonFormat(
       then sd.PLong(asLong)
       else if pt.isTypeDouble then sd.PDouble(asDouble)
       else if pt.isTypeDouble then sd.PFloat(asDouble.toFloat)
-      else if pt.isTypeEnum && formatEnumsAsNumbers then
+      else if pt.isTypeEnum then
         val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
         ed.findValueByNumber(asLong.toInt) match
           case None     => sd.PEmpty // ignore unknown value
@@ -432,7 +432,7 @@ class JsonFormat(
     override def visitString(s: CharSequence, index: Int) =
       checkNotRepeated("string", index)
 
-      if fd.protoType.isTypeEnum && !formatEnumsAsNumbers then
+      if fd.protoType.isTypeEnum then
         val sd.ScalaType.Enum(ed) = (fd.scalaType: @unchecked)
         ed.values.find(_.name == s.toString) match
           case None     => sd.PEmpty // ignore unknown value
