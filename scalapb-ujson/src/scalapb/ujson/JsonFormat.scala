@@ -167,7 +167,7 @@ class JsonFormat(
             val nanos = fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
 
             // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-            val str = Timestamps.writeTimestamp(Timestamp(seconds.value, nanos.value))
+            val str = TimeUtils.writeTimestamp(Timestamp(seconds.value, nanos.value))
             out.visitString(str, -1)
 
       case JsonFormat.DurationDescriptor =>
@@ -177,7 +177,7 @@ class JsonFormat(
             val nanos = fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
 
             // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-            val str = Durations.writeDuration(Duration(seconds.value, nanos.value))
+            val str = TimeUtils.writeDuration(Duration(seconds.value, nanos.value))
             out.visitString(str, -1)
 
       case JsonFormat.FieldMaskDescriptor =>

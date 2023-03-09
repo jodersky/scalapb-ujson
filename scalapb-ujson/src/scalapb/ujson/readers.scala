@@ -135,11 +135,11 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
       d match
         case JsonFormat.TimestampDescriptor =>
           specialParse("timestamp") {
-            Timestamps.parseTimestamp(s.toString).toPMessage
+            TimeUtils.parseTimestamp(s.toString).toPMessage
           }
         case JsonFormat.DurationDescriptor =>
           specialParse("duration") {
-            Durations.parseDuration(s.toString).toPMessage
+            TimeUtils.parseDuration(s.toString).toPMessage
           }
         case JsonFormat.FieldMaskDescriptor =>
           specialParse("fieldmask") {

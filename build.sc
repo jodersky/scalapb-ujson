@@ -8,10 +8,12 @@ trait MainModule extends ScalaModule with ScalafmtModule {
   def ivyDeps = Agg(
     ivy"com.lihaoyi::upickle::2.0.0",
     ivy"com.thesamet.scalapb::scalapb-runtime::0.11.12",
-    ivy"com.thesamet.scalapb.common-protos::proto-google-common-protos-scalapb_0.11:2.9.6-0"
+    ivy"io.github.cquiroz::scala-java-time::2.5.0"
+    // ivy"com.thesamet.scalapb.common-protos::proto-google-common-protos-scalapb_0.11:2.9.6-0"
   )
 
   trait UTest extends TestModule with ScalaPBModule {
+    def scalaPBGrpc = false
     def scalaPBLenses = false
     def scalaPBVersion = "0.11.12"
     def testFramework = "utest.runner.Framework"
