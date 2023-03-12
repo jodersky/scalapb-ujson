@@ -188,8 +188,6 @@ representation.
   inspiration for this project. It provides similar features, however it also
   diverges with this project in a few important points:
 
-  - it has plenty of customizations but doesn't necessarily try to follow the
-    canonical JSON mapping
   - it uses json4s rather than ujson (which is the recommended JSON library from
     the Scala Toolkit)
   - it only works on the JVM
