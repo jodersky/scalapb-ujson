@@ -20,7 +20,7 @@ trait MainModule extends ScalaModule with ScalafmtModule with Publish {
   def scalaVersion = "3.2.2"
 
   def ivyDeps = Agg(
-    ivy"com.lihaoyi::upickle::2.0.0",
+    ivy"com.lihaoyi::ujson::3.0.0",
     ivy"com.thesamet.scalapb::scalapb-runtime::0.11.12",
     ivy"io.github.cquiroz::scala-java-time::2.5.0"
   )
@@ -45,7 +45,7 @@ object `scalapb-ujson` extends Module {
     object test extends Tests with UTest
   }
   object js extends MainModule with ScalaJSModule {
-    def scalaJSVersion = "1.12.0"
+    def scalaJSVersion = "1.13.0"
     def millSourcePath = super.millSourcePath / os.up
     object test extends Tests with UTest
   }

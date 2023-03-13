@@ -125,7 +125,7 @@ libraries, some dependencies are required.
 
 | Dependency | Reason |
 |------------|--------|
-| [ujson](https://github.com/com-lihaoyi/upickle) 2.x | One end of the conversion. Note that only the `ujson` and the core library is needed. There is NO dependency on the upickle macro library. |
+| [ujson](https://github.com/com-lihaoyi/upickle) 3.x | One end of the conversion. Note that only the `ujson` and the core library is needed. There is NO dependency on the upickle macro library. |
 | [scalapb-runtime](https://scalapb.github.io/) 0.11.x | The other end of the conversion. |
 | [Scala Java Time](https://github.com/cquiroz/scala-java-time) 2.x | A Scala implementation of the `java.time` package. The time package is needed for serializing some well-known protocol buffers to JSON strings, and the Scala-implementation is needed to support cross-building for JS and native. |
 
@@ -160,6 +160,8 @@ Missing features:
 - special serialization of `google.protobuf.Any`
 - special serialization of `ListValue, Value, Struct and NullValue`
 
+Only Protocol Buffers version 3 has been tested.
+
 ## Why?
 
 Protocol buffers are a binary format which makes them very efficient. However,
@@ -184,9 +186,9 @@ representation.
 
 ### Alternatives
 
-- [scalapb-json4](https://github.com/scalapb/scalapb-json4s) is a direct
+- [scalapb-json4s](https://github.com/scalapb/scalapb-json4s) is a direct
   inspiration for this project. It provides similar features, however it also
-  diverges with this project in a few important points:
+  diverges with this project in a couple of important points:
 
   - it uses json4s rather than ujson (which is the recommended JSON library from
     the Scala Toolkit)
