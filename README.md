@@ -144,7 +144,7 @@ following minimums are required:
 The project is published to Maven Central:
 
 ```
-ivy"io.crashbox::scalapb-ujson:0.1.1"
+ivy"io.crashbox::scalapb-ujson:0.2.0"
 ```
 
 ## Feature-Completeness
