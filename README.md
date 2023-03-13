@@ -85,7 +85,7 @@ The full example source code is contained in `example/`. You can run it with
 ## Documentation
 
 **The central element of scalapb-ujson is the
-[`scalapb.usjon.JsonFormat`](http://jodersky.github.io/scalapb-ujson/scalapb/ujson/JsonFormat.html)
+[`scalapb.usjon.JsonFormat`](http://jodersky.github.io/scalapb-ujson/scalapb/ujson/JsonFormat$.html)
 object.**
 
 It has several `write` and `read` methods, which allow you to convert between

@@ -85,8 +85,7 @@ object JsonFormat extends JsonFormat(true, true, false)
   * the message will be transformed into a string directly, without passing
   * through an intermediate JSON tree structure. Or, if you write a message to a
   * stream, the message is written on demand and no full JSON string needs to be
-  * generated beforehand. // TODO: check this latter claim, I'm not sure if
-  * upickle's renderers actually uphold this
+  * generated beforehand.
   *
   * @param preserveProtoFieldNames
   *   Default true. If set, then the field names of protobuf messages are used
@@ -101,9 +100,9 @@ object JsonFormat extends JsonFormat(true, true, false)
   *   Default false. Use enum values' numbers instead of their names.
   */
 class JsonFormat(
-    val preserveProtoFieldNames: Boolean = true,
-    val includeDefaultValueFields: Boolean = true,
-    val formatEnumsAsNumbers: Boolean = false
+    preserveProtoFieldNames: Boolean = true,
+    includeDefaultValueFields: Boolean = true,
+    formatEnumsAsNumbers: Boolean = false
 ):
 
   private def jsonName(fd: sd.FieldDescriptor): String =
@@ -113,6 +112,8 @@ class JsonFormat(
       fd.asProto.jsonName
         .getOrElse(JsonFormatUtils.camelify(fd.asProto.getName))
 
+  /** Convert a ScalaPB-generated message to its canonical JSON representation,
+    * as a string. */
   def write(
       message: scalapb.GeneratedMessage,
       indent: Int = -1,
@@ -122,6 +123,11 @@ class JsonFormat(
     writeTo(message, writer, indent, escapeUnicode)
     writer.toString
 
+  /** Convert a ScalaPB-generated message to its canonical JSON representation
+    * and write it to some output writer.
+    *
+    * This is faster than first creating a string and then writing it, and also
+    * materializes less intermediate datastructures in memory. */
   def writeTo(
       message: scalapb.GeneratedMessage,
       out: java.io.Writer,
@@ -130,6 +136,11 @@ class JsonFormat(
   ): Unit =
     Writer.transform(message, ujson.Renderer(out, indent, escapeUnicode))
 
+  /** Convert a ScalaPB-generated message to its canonical JSON representation
+    * and write it as utf-8 bytes to an output stream.
+    *
+    * This is faster than first creating a string and then writing it, and also
+    * materializes less intermediate datastructures in memory. */
   def writeToOutputStream(
       message: scalapb.GeneratedMessage,
       out: java.io.OutputStream,
@@ -141,6 +152,8 @@ class JsonFormat(
       ujson.BaseByteRenderer(out, indent, escapeUnicode)
     )
 
+  /** Convert a ScalaPB-generated message to its canonical JSON representation,
+    * as an array of bytes equivalent to its string representation. */
   def writeToByteArray(
       message: scalapb.GeneratedMessage,
       indent: Int = -1,
@@ -150,6 +163,8 @@ class JsonFormat(
     writeToOutputStream(message, baos, indent, escapeUnicode)
     baos.toByteArray
 
+  /** Convert a ScalaPB-generated message to its canonical JSON representation,
+    * as a ujson.Value object. */
   def writeToJson(
       message: scalapb.GeneratedMessage,
       indent: Int = -1,
@@ -376,8 +391,6 @@ class JsonFormat(
           -1
         )
 
-  private inline def unsignedInt(n: Int): Long = n & 0x00000000ffffffffL
-
   private def writePrimitive[V](
       out: Visitor[_, V],
       fd: sd.FieldDescriptor,
@@ -417,6 +430,30 @@ class JsonFormat(
         throw new RuntimeException("should not happen")
     }
 
+  /** Read JSON and convert it to a ScalaPB-generated message type.
+    *
+    * The source of JSON can be anything than can be converted to a
+    * `ujson.Readable` type. Examples include:
+    *  - String
+    *  - java.io.InputStream
+    *  - ujson.Value
+    *  - geny.Readable
+    *
+    * See the [ujson.Readable companion
+    * object](https://github.com/com-lihaoyi/upickle/blob/main/ujson/src/ujson/Readable.scala)
+    * fort a list of all available implicit conversions.
+    *
+    * Note: this method accepts input from any instance of JsonFormat,
+    * regardless of the customizations given as parameters. As such, it could
+    * technically only be defined as a global method, or part of the JsonFormat
+    * companion object. However, to keep symmetry with `write` methods and for
+    * usability, it is defined per-instance but calls out to the same global
+    * objects implementing the actual read functionailty.
+    *
+    * @throws JsonReadException if something went wrong reading or parsing the
+    * input JSON. The exception contains a `position` field, which can be used
+    * to retrieve the position in the input at which the error occured.
+    */
   def read[A <: scalapb.GeneratedMessage](json: ujson.Readable)(using
       companion: scalapb.GeneratedMessageCompanion[A]
   ): A =
