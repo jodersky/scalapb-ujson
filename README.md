@@ -136,7 +136,7 @@ conservative with the minimal required versions. As of this writing, the
 following minimums are required:
 
 - Scala: 3.2.2
-- Scala JS: 1.12.0
+- Scala JS: 1.13.0
 - Scala Native: 0.4.10
 
 ## Maven Coordinates
