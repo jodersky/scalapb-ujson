@@ -13,7 +13,10 @@ import java.text.ParseException
 object TimeUtils:
 
   def writeTimestamp(ts: Timestamp): String =
-    java.time.Instant.ofEpochSecond(ts.seconds, ts.nanos).toString
+    writeTimestamp(ts.seconds, ts.nanos)
+
+  def writeTimestamp(seconds: Long, nanos: Int): String =
+    java.time.Instant.ofEpochSecond(seconds, nanos).toString
 
   def parseTimestamp(value: String): Timestamp =
     val instant = java.time.Instant.parse(value)
@@ -30,14 +33,16 @@ object TimeUtils:
     }
   }
 
-  def writeDuration(d: Duration): String =
-    val r = StringBuilder()
-    if d.seconds < 0 || d.nanos < 0 then r.append("-")
+  def writeDuration(d: Duration): String = writeDuration(d.seconds, d.nanos)
 
-    r.append(d.seconds.abs)
-    if d.nanos != 0 then
+  def writeDuration(seconds: Long, nanos: Int): String =
+    val r = StringBuilder()
+    if seconds < 0 || nanos < 0 then r.append("-")
+
+    r.append(seconds.abs)
+    if nanos != 0 then
       r.append(".")
-      r.append(formatNanos(d.nanos))
+      r.append(formatNanos(nanos))
 
     r.append("s")
     r.result()

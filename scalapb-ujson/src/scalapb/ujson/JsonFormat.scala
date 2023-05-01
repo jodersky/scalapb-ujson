@@ -25,19 +25,19 @@ class JsonReadException(
 object JsonFormatUtils:
 
   // descriptors of well-known messages
-  final val TimestampDescriptor = Timestamp.scalaDescriptor
-  final val DurationDescriptor = Duration.scalaDescriptor
-  final val FieldMaskDescriptor = FieldMask.scalaDescriptor
+  final val TimestampDescriptor = Timestamp.scalaDescriptor.fullName
+  final val DurationDescriptor = Duration.scalaDescriptor.fullName
+  final val FieldMaskDescriptor = FieldMask.scalaDescriptor.fullName
 
-  final val DoubleValueDescriptor = wrappers.DoubleValue.scalaDescriptor
-  final val FloatValueDescriptor = wrappers.FloatValue.scalaDescriptor
-  final val Int32ValueDescriptor = wrappers.Int32Value.scalaDescriptor
-  final val Int64ValueDescriptor = wrappers.Int64Value.scalaDescriptor
-  final val UInt32ValueDescriptor = wrappers.UInt32Value.scalaDescriptor
-  final val UInt64ValueDescriptor = wrappers.UInt64Value.scalaDescriptor
-  final val BoolValueDescriptor = wrappers.BoolValue.scalaDescriptor
-  final val BytesValueDescriptor = wrappers.BytesValue.scalaDescriptor
-  final val StringValueDescriptor = wrappers.StringValue.scalaDescriptor
+  final val DoubleValueDescriptor = wrappers.DoubleValue.scalaDescriptor.fullName
+  final val FloatValueDescriptor = wrappers.FloatValue.scalaDescriptor.fullName
+  final val Int32ValueDescriptor = wrappers.Int32Value.scalaDescriptor.fullName
+  final val Int64ValueDescriptor = wrappers.Int64Value.scalaDescriptor.fullName
+  final val UInt32ValueDescriptor = wrappers.UInt32Value.scalaDescriptor.fullName
+  final val UInt64ValueDescriptor = wrappers.UInt64Value.scalaDescriptor.fullName
+  final val BoolValueDescriptor = wrappers.BoolValue.scalaDescriptor.fullName
+  final val BytesValueDescriptor = wrappers.BytesValue.scalaDescriptor.fullName
+  final val StringValueDescriptor = wrappers.StringValue.scalaDescriptor.fullName
 
   /** `this_is_snake_case => thisIsCamelCase` */
   def camelify(snake: String): String =
@@ -93,15 +93,15 @@ object JsonFormat extends JsonFormat(true, true, false)
   *   camelCase.
   *
   * @param includeDefaultValueFields
-  *   Default true. If set, then fields of messages are always included in JSON,
-  *   even if they are not set or correspond to the default protobuf value.
+  *   Default false. If set, then fields of messages are always included in JSON,
+  *   even if they correspond to the default protobuf value.
   *
   * @param formatEnumsAsNumbers
   *   Default false. Use enum values' numbers instead of their names.
   */
 class JsonFormat(
     preserveProtoFieldNames: Boolean = true,
-    includeDefaultValueFields: Boolean = true,
+    includeDefaultValueFields: Boolean = false,
     formatEnumsAsNumbers: Boolean = false
 ):
 
@@ -185,74 +185,17 @@ class JsonFormat(
     val orderedFields: Seq[sd.FieldDescriptor] = descriptor.fields
     val fields = message.value
 
-    descriptor match
-      case JsonFormatUtils.TimestampDescriptor =>
-        // PEmpty in a non-message field means that we're recursively completing with default values
-        (fields(descriptor.findFieldByNumber(1).get): @unchecked) match
-          case sd.PEmpty => out.visitString("1970-01-01T00:00:00Z", -1)
-          case seconds: sd.PLong =>
-            val nanos =
-              fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
+    val objVisitor = out.visitObject(
+      length = fields.size,
+      jsonableKeys = true, // no idea what this does
+      -1
+    )
 
-            // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-            val str =
-              TimeUtils.writeTimestamp(Timestamp(seconds.value, nanos.value))
-            out.visitString(str, -1)
+    for descriptor <- orderedFields do
+      val value = fields(descriptor)
+      writeField(objVisitor, descriptor, value)
 
-      case JsonFormatUtils.DurationDescriptor =>
-        (fields(descriptor.findFieldByNumber(1).get): @unchecked) match
-          case sd.PEmpty => out.visitString("0s", -1)
-          case seconds: sd.PLong =>
-            val nanos =
-              fields(descriptor.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
-
-            // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-            val str =
-              TimeUtils.writeDuration(Duration(seconds.value, nanos.value))
-            out.visitString(str, -1)
-
-      case JsonFormatUtils.FieldMaskDescriptor =>
-        (fields(descriptor.findFieldByNumber(1).get): @unchecked) match
-          case sd.PEmpty           => out.visitString("", -1)
-          case paths: sd.PRepeated =>
-            // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
-            val str = FieldMaskUtil.toJsonString(
-              FieldMask(paths.value.map(_.asInstanceOf[sd.PString].value))
-            )
-            out.visitString(str, -1)
-
-      case JsonFormatUtils.DoubleValueDescriptor |
-          JsonFormatUtils.FloatValueDescriptor |
-          JsonFormatUtils.Int32ValueDescriptor |
-          JsonFormatUtils.Int64ValueDescriptor |
-          JsonFormatUtils.UInt32ValueDescriptor |
-          JsonFormatUtils.UInt64ValueDescriptor |
-          JsonFormatUtils.BoolValueDescriptor |
-          JsonFormatUtils.BytesValueDescriptor |
-          JsonFormatUtils.StringValueDescriptor =>
-        val fd = descriptor.findFieldByNumber(1).get
-        val pv = fields(fd)
-
-        if pv != sd.PEmpty then
-          writePrimitive(
-            out,
-            fd,
-            fields(fd)
-          )
-        else out.visitNull(-1)
-
-      case _ =>
-        val objVisitor = out.visitObject(
-          length = fields.size,
-          jsonableKeys = true, // no idea what this does,
-          -1
-        )
-
-        for descriptor <- orderedFields do
-          val value = fields(descriptor)
-          writeField(objVisitor, descriptor, value)
-
-        objVisitor.visitEnd(-1)
+    objVisitor.visitEnd(-1)
   end writeMessage
 
   private def writeField(
@@ -261,43 +204,9 @@ class JsonFormat(
       value: sd.PValue
   ): Unit = value match
     case sd.PEmpty =>
-      if includeDefaultValueFields then
-        out.visitKeyValue(out.visitKey(-1).visitString(jsonName(fd), -1))
+      // sd.PEmpty is for unset fields of type message
+      // nothing is written for unset messages
 
-        if fd.containingOneof.isDefined then
-          out.narrow.visitValue(
-            out.subVisitor.visitNull(-1),
-            -1
-          )
-        else
-        // This is a bit of a trick: in ScalaPB, PEmpty is only used for message
-        // fields, so this check would be redundant. However, in order to avoid
-        // code duplication, we recursively call this function with PEmpty
-        // meaning the absence of a value, even for primitive types. This allows
-        // us to recursively construct nested default messages, without the need
-        // of duplicating logic in a separate function.
-        if fd.protoType.isTypeMessage then
-          val sd.ScalaType.Message(md) = (fd.scalaType: @unchecked)
-
-          out.narrow.visitValue(
-            writeMessage(
-              out.subVisitor,
-              md,
-              sd.PMessage(
-                md.fields.map(f => f -> sd.PEmpty).toMap
-              ) // here PEmpty is not necessarily a missing *message* type
-            ),
-            -1
-          )
-        else
-          out.narrow.visitValue(
-            writePrimitive(
-              out.subVisitor,
-              fd,
-              JsonFormatUtils.defaultPrimitiveValue(fd)
-            ),
-            -1
-          )
     case sd.PRepeated(xs) =>
       if xs.nonEmpty || includeDefaultValueFields then
         out.visitKeyValue(out.visitKey(-1).visitString(jsonName(fd), -1))
@@ -324,60 +233,30 @@ class JsonFormat(
 
             objv.visitKeyValue(objv.visitKey(-1).visitString(key, -1))
 
-            if valueDescriptor.protoType.isTypeMessage then
-              val sd.ScalaType.Message(md) =
-                (valueDescriptor.scalaType: @unchecked)
-              objv.narrow.visitValue(
-                writeMessage(
-                  objv.narrow.subVisitor,
-                  md,
-                  kv.value(valueDescriptor).asInstanceOf[sd.PMessage]
-                ),
-                -1
-              )
-            else
-              objv.narrow.visitValue(
-                writePrimitive(
-                  objv.narrow.subVisitor,
-                  valueDescriptor,
-                  kv.value(valueDescriptor)
-                ),
-                -1
-              )
-          end for
-          out.narrow.visitValue(objv.visitEnd(-1), -1)
-        else if fd.protoType.isTypeMessage then
-          val sd.ScalaType.Message(md) = (fd.scalaType: @unchecked)
-          val arrv = out.subVisitor.visitArray(xs.size, -1)
-          for x <- xs do
-            arrv.narrow.visitValue(
-              writeMessage(
-                arrv.subVisitor,
-                md,
-                x.asInstanceOf[sd.PMessage]
+            objv.narrow.visitValue(
+              writeFieldValue(
+                objv.narrow.subVisitor,
+                valueDescriptor,
+                kv.value(valueDescriptor)
               ),
               -1
             )
-          out.narrow.visitValue(arrv.visitEnd(-1), -1)
+          end for
+          out.narrow.visitValue(objv.visitEnd(-1), -1)
+
         else
           val arrv = out.subVisitor.visitArray(xs.size, -1)
           for x <- xs do
             arrv.narrow.visitValue(
-              writePrimitive(arrv.narrow.subVisitor, fd, x),
+              writeFieldValue(arrv.narrow.subVisitor, fd, x),
               -1
             )
           out.narrow.visitValue(arrv.visitEnd(-1), -1)
 
     case msg: sd.PMessage =>
       out.visitKeyValue(out.visitKey(-1).visitString(jsonName(fd), -1))
-
-      val sd.ScalaType.Message(md) = (fd.scalaType: @unchecked)
       out.narrow.visitValue(
-        writeMessage(
-          out.subVisitor,
-          md,
-          msg
-        ),
+        writeFieldValue(out.subVisitor, fd, value),
         -1
       )
 
@@ -387,9 +266,76 @@ class JsonFormat(
       then
         out.visitKeyValue(out.visitKey(-1).visitString(jsonName(fd), -1))
         out.narrow.visitValue(
-          writePrimitive(out.subVisitor, fd, other),
+          writeFieldValue(out.subVisitor, fd, value),
           -1
         )
+
+  private def writeFieldValue[V](
+    out: Visitor[_, V],
+    descriptor: sd.FieldDescriptor,
+    value: sd.PValue
+  ): V =
+    descriptor.scalaType match
+      case sd.ScalaType.Message(md) =>
+        val message = value.asInstanceOf[sd.PMessage]
+
+        // TODO: use full name comparison
+        if md.fullName == JsonFormatUtils.TimestampDescriptor then
+          val seconds = message.value(md.findFieldByNumber(1).get).asInstanceOf[sd.PLong]
+          val nanos = message.value(md.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
+          val str = TimeUtils.writeTimestamp(seconds.value, nanos.value)
+          out.visitString(str, -1)
+        else if md.fullName == JsonFormatUtils.DurationDescriptor then
+          val seconds = message.value(md.findFieldByNumber(1).get).asInstanceOf[sd.PLong]
+          val nanos = message.value(md.findFieldByNumber(2).get).asInstanceOf[sd.PInt]
+          val str = TimeUtils.writeDuration(seconds.value, nanos.value)
+          out.visitString(str, -1)
+        else if md.fullName == JsonFormatUtils.FieldMaskDescriptor then
+          val paths = message.value(md.findFieldByNumber(1).get).asInstanceOf[sd.PRepeated]
+          // TODO: not ideal that we need to rebuild a Scala class instance from a PValue
+          val str = FieldMaskUtil.toJsonString(
+            FieldMask(paths.value.map(_.asInstanceOf[sd.PString].value))
+          )
+          out.visitString(str, -1)
+        else if
+          md.fullName == JsonFormatUtils.DoubleValueDescriptor ||
+          md.fullName == JsonFormatUtils.FloatValueDescriptor ||
+          md.fullName == JsonFormatUtils.Int32ValueDescriptor ||
+          md.fullName == JsonFormatUtils.Int64ValueDescriptor ||
+          md.fullName == JsonFormatUtils.UInt32ValueDescriptor ||
+          md.fullName == JsonFormatUtils.UInt64ValueDescriptor ||
+          md.fullName == JsonFormatUtils.BoolValueDescriptor ||
+          md.fullName == JsonFormatUtils.BytesValueDescriptor ||
+          md.fullName == JsonFormatUtils.StringValueDescriptor
+        then
+          val fd = md.findFieldByNumber(1).get
+          val pv = message.value(fd)
+
+          if pv != sd.PEmpty then
+            writePrimitive(out, fd, pv)
+          else out.visitNull(-1)
+
+        else
+          // PMessage doesn't have a field order, so we use the descriptor to look them up
+          val orderedFields: Seq[sd.FieldDescriptor] = md.fields
+          val fields = message.value
+
+          val objVisitor = out.visitObject(
+            length = fields.size,
+            jsonableKeys = true, // no idea what this does
+            -1
+          )
+
+          for descriptor <- orderedFields do
+            val value = fields(descriptor)
+            writeField(objVisitor, descriptor, value)
+
+          objVisitor.visitEnd(-1)
+
+      case _ =>
+        writePrimitive(out, descriptor, value)
+
+  end writeFieldValue
 
   private def writePrimitive[V](
       out: Visitor[_, V],
@@ -448,11 +394,11 @@ class JsonFormat(
     * technically only be defined as a global method, or part of the JsonFormat
     * companion object. However, to keep symmetry with `write` methods and for
     * usability, it is defined per-instance but calls out to the same global
-    * objects implementing the actual read functionailty.
+    * objects implementing the actual read functionality.
     *
     * @throws JsonReadException if something went wrong reading or parsing the
     * input JSON. The exception contains a `position` field, which can be used
-    * to retrieve the position in the input at which the error occured.
+    * to retrieve the position in the input at which the error occurred.
     */
   def read[A <: scalapb.GeneratedMessage](json: ujson.Readable)(using
       companion: scalapb.GeneratedMessageCompanion[A]

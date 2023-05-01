@@ -7,8 +7,7 @@ object RwTests extends TestSuite:
   def assertEqual[A <: scalapb.GeneratedMessage](
     format: JsonFormat,
     message: A,
-    json: String,
-    checkRead: Boolean = true
+    json: String
   )(using companion: scalapb.GeneratedMessageCompanion[A]): Unit =
     val asTree = format.writeToJson(message)
     val tree = ujson.read(json)
@@ -21,9 +20,8 @@ object RwTests extends TestSuite:
     val fromString: A = format.read[A](json)
     val fromTree: A = format.read[A](tree)
 
-    if checkRead then
-      assert(fromString == message)
-      assert(fromTree == message)
+    assert(fromString == message)
+    assert(fromTree == message)
 
 
   val tests = Tests{
@@ -44,24 +42,14 @@ object RwTests extends TestSuite:
              |  "str": "",
              |  "flag": false,
              |  "state": "UNKNOWN",
-             |  "nested": {
-             |    "inner": {
-             |      "payload": ""
-             |    }
-             |  },
              |  "repeated_string": [],
              |  "repeated_nested": [],
              |  "messages": {},
              |  "nested_map": {},
-             |  "either_1": null,
-             |  "either_2": null,
-             |  "either_3": null,
-             |  "either_4": null,
-             |  "data": "",
-             |  "optint": null
+             |  "data": ""
              |}
              |""".stripMargin
-        assertEqual(fmt, msg, expected, checkRead = false) // can't easily check reads with defaults included
+        assertEqual(fmt, msg, expected)
       }
     }
     test("camel case") {
@@ -283,7 +271,7 @@ object RwTests extends TestSuite:
         )
 
         val msg = protos.SpecialFormats()
-        assertEqual(fmt, msg, """{"ts":"1970-01-01T00:00:00Z","duration":"0s","wrapper": null, "fm":""}""", checkRead = false)
+        assertEqual(fmt, msg, """{}""")
       }
       test("values") {
         val fmt = JsonFormat(

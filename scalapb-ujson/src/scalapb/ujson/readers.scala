@@ -74,7 +74,7 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
     if fd.protoType.isTypeBool then sd.PBoolean(value)
     else if fd.protoType.isTypeMessage then
       val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
-      d match
+      d.fullName match
         case JsonFormatUtils.BoolValueDescriptor =>
           sd.PMessage(Map(d.fields(0) -> sd.PBoolean(value)))
         case _ =>
@@ -111,7 +111,7 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
     else if pt.isTypeFloat then sd.PFloat(asDouble.toFloat)
     else if pt.isTypeMessage then
       val sd.ScalaType.Message(d) = (fd.scalaType: @unchecked)
-      d match
+      d.fullName match
         case JsonFormatUtils.Int32ValueDescriptor |
             JsonFormatUtils.UInt32ValueDescriptor =>
           sd.PMessage(Map(d.fields(0) -> sd.PInt(asLong.toInt)))
@@ -172,7 +172,7 @@ private class FieldVisitor(var fd: sd.FieldDescriptor, inArray: Boolean = false)
               t
             )
 
-      d match
+      d.fullName match
         case JsonFormatUtils.TimestampDescriptor =>
           specialParse("timestamp") {
             TimeUtils.parseTimestamp(s.toString).toPMessage
