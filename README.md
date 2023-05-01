@@ -144,7 +144,7 @@ following minimums are required:
 The project is published to Maven Central:
 
 ```
-ivy"io.crashbox::scalapb-ujson:0.2.0"
+ivy"io.crashbox::scalapb-ujson:0.3.0"
 ```
 
 ## Feature-Completeness
@@ -196,7 +196,7 @@ representation.
 
 - [gRPC Gateway](https://github.com/grpc-ecosystem/grpc-gateway). scalapb-ujson
   integrates directly with ScalaPB and is not designed to be a converter of
-  protobuf on the wire. In case you have a mature service architecture then gRPC
+  protobuf on the wire. In case you have a service architecture then gRPC
   gateway is a viable alternative. scalapb-ujson is only designed for standalone
   applications (and doesn't support gRPC service mapping).
 
