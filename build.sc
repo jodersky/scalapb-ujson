@@ -3,7 +3,7 @@ import $ivy.`com.lihaoyi::mill-contrib-scalapblib:$MILL_VERSION`
 import contrib.scalapblib.ScalaPBModule
 
 trait Publish extends PublishModule {
-  def publishVersion = "0.3.0"
+  def publishVersion = "0.3.1"
   def pomSettings = PomSettings(
     description = "scalapb-ujson",
     organization = "io.crashbox",
