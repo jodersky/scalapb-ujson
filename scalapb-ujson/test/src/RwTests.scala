@@ -29,11 +29,17 @@ object RwTests extends TestSuite:
     test("empty") {
       val msg = protos.Message()
       test("no defaults"){
-        val fmt = JsonFormat(includeDefaultValueFields = false)
+        val fmt = JsonFormat(
+          preserveProtoFieldNames = true,
+          includeDefaultValueFields = false
+        )
         assertEqual(fmt, msg, "{}")
       }
       test("show defaults") {
-        val fmt = JsonFormat(includeDefaultValueFields = true)
+        val fmt = JsonFormat(
+          preserveProtoFieldNames = true,
+          includeDefaultValueFields = true
+        )
 
         val expected =
           """|{
@@ -77,7 +83,10 @@ object RwTests extends TestSuite:
         flag = true
       )
       test("no defaults"){
-        val fmt = JsonFormat(includeDefaultValueFields = false)
+        val fmt = JsonFormat(
+          preserveProtoFieldNames = true,
+          includeDefaultValueFields = false
+        )
 
         val expected =
           """|{
@@ -96,12 +105,16 @@ object RwTests extends TestSuite:
         state = protos.Message.State.OK
       )
       test("name"){
-        val fmt = JsonFormat(includeDefaultValueFields = false)
+        val fmt = JsonFormat(
+          preserveProtoFieldNames = true,
+          includeDefaultValueFields = false
+        )
         val expected = """{"state":"OK"}"""
         assertEqual(fmt, msg, expected)
       }
       test("number"){
         val fmt = JsonFormat(
+          preserveProtoFieldNames = true,
           includeDefaultValueFields = false,
           formatEnumsAsNumbers = true
         )
@@ -116,6 +129,7 @@ object RwTests extends TestSuite:
             .withInner(protos.Message.Nested.Inner("hello, world"))
         )
       val fmt = JsonFormat(
+        preserveProtoFieldNames = true,
         includeDefaultValueFields = false
       )
       val expected =
@@ -145,6 +159,7 @@ object RwTests extends TestSuite:
       )
 
       val fmt = JsonFormat(
+        preserveProtoFieldNames = true,
         includeDefaultValueFields = false
       )
       val expected =
@@ -186,6 +201,7 @@ object RwTests extends TestSuite:
 
       test("direct") {
         val fmt = JsonFormat(
+          preserveProtoFieldNames = true,
           includeDefaultValueFields = false
         )
 
@@ -216,6 +232,7 @@ object RwTests extends TestSuite:
     }
     test("oneof") {
       val fmt = JsonFormat(
+        preserveProtoFieldNames = true,
         includeDefaultValueFields = false
       )
       test("opt1") {
@@ -243,6 +260,7 @@ object RwTests extends TestSuite:
     }
     test("binary") {
       val fmt = JsonFormat(
+        preserveProtoFieldNames = true,
         includeDefaultValueFields = false
       )
       val msg = protos.Message(
@@ -252,6 +270,7 @@ object RwTests extends TestSuite:
     }
     test("optional") {
       val fmt = JsonFormat(
+        preserveProtoFieldNames = true,
         includeDefaultValueFields = false
       )
       val msg = protos.Message(optint = Some(0))
@@ -260,6 +279,7 @@ object RwTests extends TestSuite:
     test("specials") {
       test("no defaults") {
         val fmt = JsonFormat(
+          preserveProtoFieldNames = true,
           includeDefaultValueFields = false
         )
 
@@ -268,6 +288,7 @@ object RwTests extends TestSuite:
       }
       test("defaults") {
         val fmt = JsonFormat(
+          preserveProtoFieldNames = true,
           includeDefaultValueFields = true
         )
 
@@ -276,6 +297,7 @@ object RwTests extends TestSuite:
       }
       test("values") {
         val fmt = JsonFormat(
+          preserveProtoFieldNames = true,
           includeDefaultValueFields = false
         )
 

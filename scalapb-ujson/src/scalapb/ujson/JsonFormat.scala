@@ -88,7 +88,7 @@ object JsonFormat extends JsonFormat(true, true, false)
   * generated beforehand.
   *
   * @param preserveProtoFieldNames
-  *   Default true. If set, then the field names of protobuf messages are used
+  *   Default false. If set, then the field names of protobuf messages are used
   *   as-is (this means usually snake_case). Otherwise, they are converted to
   *   camelCase.
   *
@@ -100,7 +100,7 @@ object JsonFormat extends JsonFormat(true, true, false)
   *   Default false. Use enum values' numbers instead of their names.
   */
 class JsonFormat(
-    val preserveProtoFieldNames: Boolean = true,
+    val preserveProtoFieldNames: Boolean = false,
     val includeDefaultValueFields: Boolean = false,
     val formatEnumsAsNumbers: Boolean = false
 ):
