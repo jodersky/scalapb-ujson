@@ -2,7 +2,7 @@ import utest.*
 
 import scalapb.ujson.JsonReadException
 import scalapb.ujson.JsonFormat
-import protos.Message
+import protos.protos.Message
 
 object NegTests extends TestSuite:
 

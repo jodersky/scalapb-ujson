@@ -100,9 +100,9 @@ object JsonFormat extends JsonFormat(true, true, false)
   *   Default false. Use enum values' numbers instead of their names.
   */
 class JsonFormat(
-    preserveProtoFieldNames: Boolean = true,
-    includeDefaultValueFields: Boolean = false,
-    formatEnumsAsNumbers: Boolean = false
+    val preserveProtoFieldNames: Boolean = true,
+    val includeDefaultValueFields: Boolean = false,
+    val formatEnumsAsNumbers: Boolean = false
 ):
 
   private def jsonName(fd: sd.FieldDescriptor): String =

@@ -27,32 +27,60 @@ trait MainModule extends ScalaModule with ScalafmtModule with Publish {
 
   def artifactName = "scalapb-ujson"
 
-  trait UTest extends TestModule with ScalaPBModule {
+  trait UTest extends TestModule {
+    def testFramework = "utest.runner.Framework"
+    def ivyDeps = super.ivyDeps() ++ Agg(
+      ivy"com.lihaoyi::utest::0.7.11"
+    )
+  }
+  trait PbTest extends TestModule with ScalaPBModule {
     def scalaPBGrpc = false
     def scalaPBLenses = false
     def scalaPBVersion = "0.11.12"
-    def testFramework = "utest.runner.Framework"
     def scalaPBIncludePath = super.scalaPBIncludePath() ++ Seq(scalaPBUnpackProto())
-    def ivyDeps = Agg(
-      ivy"com.lihaoyi::utest::0.7.11"
-    )
   }
 }
 
 object `scalapb-ujson` extends Module {
   object jvm extends MainModule {
     def millSourcePath = super.millSourcePath / os.up
-    object test extends Tests with UTest
+    object test extends Tests with UTest with PbTest
+    object referencetest extends Tests with UTest with PbTest {
+      def protos = T.sources(jvm.test.millSourcePath / "protobuf")
+      def scalaPBSources = T.sources(protos())
+
+      def generateJavaProtos = T {
+        for (dir <- protos(); file <- os.list(dir.path)) {
+          os.proc(
+            "protoc",
+            s"--proto_path=${dir.path}",
+            s"--java_out=${T.dest}",
+            s"-I", scalaPBUnpackProto().path,
+            file
+          ).call()
+        }
+        PathRef(T.dest)
+      }
+
+      def generatedSources = T {
+        super.generatedSources() ++ Seq(generateJavaProtos())
+      }
+
+      def ivyDeps = super.ivyDeps() ++ Agg(
+        ivy"com.google.protobuf:protobuf-java:3.22.3",
+        ivy"com.google.protobuf:protobuf-java-util:3.22.3"
+      )
+    }
   }
   object js extends MainModule with ScalaJSModule {
     def scalaJSVersion = "1.13.0"
     def millSourcePath = super.millSourcePath / os.up
-    object test extends Tests with UTest
+    object test extends Tests with UTest with PbTest
   }
   object native extends MainModule with ScalaNativeModule{
     def scalaNativeVersion = "0.4.10"
     def millSourcePath = super.millSourcePath / os.up
-    object test extends Tests with UTest
+    object test extends Tests with UTest with PbTest
   }
 }
 
