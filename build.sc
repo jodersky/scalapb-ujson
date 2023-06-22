@@ -33,7 +33,7 @@ trait MainModule extends ScalaModule with ScalafmtModule with Publish {
       ivy"com.lihaoyi::utest::0.7.11"
     )
   }
-  trait PbTest extends TestModule with ScalaPBModule {
+  trait PbTest extends ScalaPBModule {
     def scalaPBGrpc = false
     def scalaPBLenses = false
     def scalaPBVersion = "0.11.12"
@@ -44,8 +44,8 @@ trait MainModule extends ScalaModule with ScalafmtModule with Publish {
 object `scalapb-ujson` extends Module {
   object jvm extends MainModule {
     def millSourcePath = super.millSourcePath / os.up
-    object test extends Tests with UTest with PbTest
-    object referencetest extends Tests with UTest with PbTest {
+    object test extends ScalaTests with UTest with PbTest
+    object referencetest extends ScalaTests with UTest with PbTest {
       def protos = T.sources(jvm.test.millSourcePath / "protobuf")
       def scalaPBSources = T.sources(protos())
 
@@ -75,12 +75,12 @@ object `scalapb-ujson` extends Module {
   object js extends MainModule with ScalaJSModule {
     def scalaJSVersion = "1.13.0"
     def millSourcePath = super.millSourcePath / os.up
-    object test extends Tests with UTest with PbTest
+    object test extends ScalaJSTests with UTest with PbTest
   }
   object native extends MainModule with ScalaNativeModule{
     def scalaNativeVersion = "0.4.10"
     def millSourcePath = super.millSourcePath / os.up
-    object test extends Tests with UTest with PbTest
+    object test extends ScalaNativeTests with UTest with PbTest
   }
 }
 
